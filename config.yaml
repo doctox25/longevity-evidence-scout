@@ -1,0 +1,92 @@
+# Longevity Evidence Scout Configuration
+# Version 1.0 | December 2025
+
+search:
+  keywords:
+    # Aging & Biological Age
+    - "biological age blood biomarkers"
+    - "epigenetic clock methylation aging"
+    - "telomere length longevity mortality"
+    - "inflammaging chronic inflammation aging"
+    
+    # Metabolic Health
+    - "glucose regulation longevity insulin sensitivity"
+    - "HbA1c aging mortality risk"
+    - "metabolic health lifespan triglycerides"
+    - "fasting glucose healthspan diabetes prevention"
+    
+    # Cardiovascular Biomarkers
+    - "homocysteine cardiovascular aging"
+    - "lipoprotein(a) longevity mortality"
+    - "apolipoprotein B cardiovascular risk aging"
+    - "blood pressure aging vascular health"
+    
+    # Inflammation Markers
+    - "C-reactive protein CRP mortality aging"
+    - "interleukin-6 IL-6 inflammaging"
+    - "cytokines aging chronic disease"
+    - "high-sensitivity CRP cardiovascular longevity"
+    
+    # Organ Function
+    - "eGFR kidney function aging mortality"
+    - "cystatin C renal aging"
+    - "liver enzymes GGT longevity"
+    - "albumin aging frailty mortality"
+    
+    # Hormones & Metabolism
+    - "testosterone aging healthspan men"
+    - "DHEA aging biomarker longevity"
+    - "IGF-1 growth hormone aging"
+    - "thyroid function aging TSH mortality"
+    
+    # Vitamins & Nutrients
+    - "vitamin D deficiency mortality aging"
+    - "vitamin B12 cognitive aging"
+    - "omega-3 fatty acids longevity inflammation"
+    - "ferritin iron status aging"
+    
+    # Blood Counts & Hematology
+    - "hemoglobin aging anemia mortality"
+    - "neutrophil lymphocyte ratio NLR aging"
+    - "red cell distribution width RDW mortality"
+    - "platelet count aging cardiovascular"
+    
+    # Oxidative Stress
+    - "oxidative stress biomarkers aging"
+    - "glutathione antioxidant longevity"
+    - "lipid peroxidation aging disease"
+    
+    # Longevity Pathways
+    - "NAD+ metabolism aging longevity"
+    - "sirtuins SIRT1 healthspan"
+    - "AMPK mTOR aging intervention"
+    - "autophagy biomarkers longevity"
+    - "senescent cells senolytics aging"
+
+  # Date filter - fetch studies from this date forward
+  date_after: "2024-01-01"
+  
+  # Max results per keyword group (to stay within API limits)
+  max_results: 20
+
+airtable:
+  # UPDATE THESE FOR YOUR AIRTABLE BASE
+  base_id: "appXXXXXXXXXXXXXX"  # Your Clinical Ontology base ID
+  table_name: "Longevity_Evidence"
+
+scoring:
+  # Minimum star rating to save (1-5)
+  min_score_to_save: 3
+
+# Longevity domains for classification
+domains:
+  - Aging_Metabolism
+  - Inflammation
+  - Oxidative_Stress
+  - Cardiovascular
+  - Kidney_Liver
+  - Thyroid_Hormones
+  - Blood_Counts
+  - Longevity_Biomarkers
+  - Vitamins_Minerals
+  - General_Longevity
