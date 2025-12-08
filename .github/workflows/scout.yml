@@ -1,0 +1,40 @@
+name: Longevity Evidence Scout
+
+on:
+  schedule:
+    # Run daily at 6am UTC (different from toxin scout at 8am)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Manual trigger available
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install anthropic requests pyyaml
+      
+      - name: Run Longevity Evidence Scout
+        env:
+          ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_KEY }}
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+        run: python main.py
+      
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs
+          path: "*.log"
+          retention-days: 7
