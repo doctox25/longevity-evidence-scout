@@ -26,8 +26,8 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 
 # Airtable configuration - UPDATE THESE FOR YOUR BASE
-AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "appXXXXXXXXXXXXXX")  # Your Clinical base
-AIRTABLE_TABLE_NAME = "Longevity_Evidence"  # New table for longevity studies
+AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "app42HAczcSBeZOxD")  # Your Clinical base
+AIRTABLE_TABLE_NAME = "Clinical_Evidence"  # New table for longevity studies
 
 # Domain detection keywords for longevity research
 DOMAIN_KEYWORDS = {
