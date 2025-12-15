@@ -426,7 +426,7 @@ def add_to_airtable(article, extracted, stars, domain):
             "study_title": article["title"][:500],  # Airtable field limits
             "authors_year": f"{extracted.get('year', '2024')}-01-01",
             "journal": article["journal"],
-            "longevity_domain": domain,
+            "toxin_domain": domain,
             "evidence_type": extracted.get("evidence_type", ""),
             "sample_size": str(extracted.get("sample_size", "")),
             "population": extracted.get("population", ""),
