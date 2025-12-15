@@ -147,7 +147,7 @@ search:
 
 airtable:
   # UPDATE THESE FOR YOUR AIRTABLE BASE
-  base_id: "appXXXXXXXXXXXXXX"  # Your Clinical Ontology base ID
+  base_id: "app42HAczcSBeZOxD"  # Your Clinical Ontology base ID
   table_name: "Clinical_Evidence"
 
 scoring:
