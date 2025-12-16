@@ -406,7 +406,7 @@ def get_next_evidence_id():
     return f"LONG_{now.strftime('%m%d%H%M')}{stats['added_to_airtable']:02d}"
 
 def add_to_airtable(article, extracted, stars, domain):
-    """Upload study to Airtable Longevity_Evidence table"""
+    """Upload study to Airtable Clinical_Evidence table"""
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_API_KEY}",
@@ -423,23 +423,19 @@ def add_to_airtable(article, extracted, stars, domain):
     record = {
         "fields": {
             "evidence_id": get_next_evidence_id(),
-            "study_title": article["title"][:500],  # Airtable field limits
+            "study_title": article["title"][:500],
             "authors_year": f"{extracted.get('year', '2024')}-01-01",
             "journal": article["journal"],
             "toxin_domain": domain,
             "evidence_type": extracted.get("evidence_type", ""),
             "sample_size": str(extracted.get("sample_size", "")),
-            "population": extracted.get("population", ""),
-            "biomarkers_studied": biomarkers_str[:1000],
+            "markers_covered": biomarkers_str[:1000],
             "key_findings": extracted.get("key_findings", ""),
             "effect_size": extracted.get("effect_size", ""),
-            "age_relevance": extracted.get("age_relevance", ""),
             "clinical_relevance": extracted.get("clinical_relevance", ""),
             "limitations": extracted.get("limitations", ""),
-            "intervention_tested": extracted.get("intervention_tested", ""),
             "evidence_strength_score": format_stars(stars),
-            "source_url": article["url"],
-            "added_date": datetime.now().isoformat()
+            "source_url": article["url"]
         }
     }
     
