@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Longevity Evidence Scout v1.0
+Longevity Evidence Scout v1.1
 Automated discovery of healthspan and blood biomarker research from PubMed
 
 Based on ToxEcology Evidence Scout v2.1 architecture
 Adapted for longevity science and blood biomarkers
+
+CORRECTED: Field mappings match Clinical_Evidence table exactly
 """
 
 import os
@@ -17,7 +19,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from anthropic import Anthropic
 
-# Map longevity domains to ontology domain IDs
+# ============================================================================
+# DOMAIN MAPPING - Must match toxin_domain single select options exactly
+# ============================================================================
+
 DOMAIN_MAP = {
     "Inflammation": "DOM_INFLAMMATION",
     "Cardiovascular": "DOM_LIPID",
@@ -28,8 +33,8 @@ DOMAIN_MAP = {
     "Blood_Counts": "DOM_HEMATOLOGY",
     "Vitamins_Minerals": "DOM_NUTRIENT",
     "Oxidative_Stress": "DOM_INFLAMMATION",
-    "Longevity_Biomarkers": "DOM_METABOLIC",
-    "General_Longevity": "DOM_METABOLIC",
+    "Longevity_Biomarkers": "DOM_AGING",
+    "General_Longevity": "DOM_AGING",
 }
 
 # ============================================================================
@@ -40,9 +45,9 @@ DOMAIN_MAP = {
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 
-# Airtable configuration - UPDATE THESE FOR YOUR BASE
-AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_CLINICAL_BASE_ID", "app42HAczcSBeZOxD") # Your Clinical base
-AIRTABLE_TABLE_NAME = "Clinical_Evidence"  # New table for longevity studies
+# Airtable configuration
+AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_CLINICAL_BASE_ID", "app42HAczcSBeZOxD")
+AIRTABLE_TABLE_NAME = "Clinical_Evidence"
 
 # Domain detection keywords for longevity research
 DOMAIN_KEYWORDS = {
@@ -116,32 +121,7 @@ stats = {
 # AIRTABLE CACHING FUNCTIONS
 # ============================================================================
 
-_biomarker_cache = None
-_aging_conditions_cache = None
 _existing_titles_cache = None
-
-def load_biomarker_vocabulary():
-    """Load blood biomarkers from ontology for linking"""
-    global _biomarker_cache
-    if _biomarker_cache is not None:
-        return _biomarker_cache
-    
-    # If you have a Blood_Biomarker_Vocabulary table, load it here
-    # For now, return empty cache - can be populated later
-    _biomarker_cache = {}
-    print("📊 Biomarker vocabulary cache initialized (empty - add table if needed)")
-    return _biomarker_cache
-
-def load_aging_conditions():
-    """Load aging conditions for auto-linking"""
-    global _aging_conditions_cache
-    if _aging_conditions_cache is not None:
-        return _aging_conditions_cache
-    
-    # If you have an Aging_Conditions table, load it here
-    _aging_conditions_cache = {}
-    print("🏥 Aging conditions cache initialized (empty - add table if needed)")
-    return _aging_conditions_cache
 
 def get_existing_titles():
     """Fetch all existing study titles for duplicate detection"""
@@ -164,7 +144,6 @@ def get_existing_titles():
             response = requests.get(url, headers=headers, params=params, timeout=30)
             
             if response.status_code == 404:
-                # Table doesn't exist yet - that's OK
                 print(f"📋 Table {AIRTABLE_TABLE_NAME} not found - will create records fresh")
                 _existing_titles_cache = set()
                 return _existing_titles_cache
@@ -198,7 +177,6 @@ def search_pubmed(query, max_results=30, date_after="2024-01-01"):
     """Search PubMed and return list of PMIDs"""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     
-    # Add human AND longevity/aging filters
     full_query = f"({query}) AND human[MeSH Terms] AND (longevity OR aging OR biomarker OR healthspan)"
     
     params = {
@@ -243,14 +221,21 @@ def fetch_pubmed_abstract(pmid):
         if article is None:
             return None
         
-        # Extract fields
         title = article.findtext(".//ArticleTitle", "")
         abstract = article.findtext(".//AbstractText", "")
         journal = article.findtext(".//Journal/Title", "")
         year = article.findtext(".//PubDate/Year", "")
-        month = article.findtext(".//PubDate/Month", "")
         
-        # Authors
+        # If year not in PubDate/Year, try MedlineDate
+        if not year:
+            medline_date = article.findtext(".//PubDate/MedlineDate", "")
+            if medline_date:
+                year = medline_date[:4]
+        
+        # Default to current year if still not found
+        if not year:
+            year = str(datetime.now().year)
+        
         authors = []
         for author in article.findall(".//Author"):
             lastname = author.findtext("LastName", "")
@@ -266,7 +251,6 @@ def fetch_pubmed_abstract(pmid):
             "abstract": abstract,
             "journal": journal,
             "year": year,
-            "month": month,
             "authors": ", ".join(authors[:5]) + (" et al." if len(authors) > 5 else ""),
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         }
@@ -302,7 +286,6 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
     """Calculate evidence strength score (1-5 stars)"""
     score = 0
     
-    # Study design (0-2 points)
     evidence_type_lower = evidence_type.lower() if evidence_type else ""
     if "meta-analysis" in evidence_type_lower or "systematic review" in evidence_type_lower:
         score += 2.0
@@ -317,7 +300,6 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
     else:
         score += 0.3
     
-    # Sample size (0-1.5 points)
     if sample_size:
         try:
             n = int(str(sample_size).replace(",", "").split()[0])
@@ -332,23 +314,20 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
         except (ValueError, IndexError):
             pass
     
-    # Journal quality (0-1 point)
     journal_lower = journal.lower() if journal else ""
     if any(top in journal_lower for top in TOP_JOURNALS):
         score += 1.0
     else:
         score += 0.3
     
-    # Effect size reported (0-0.5 points)
-    if effect_size_reported and effect_size_reported.lower() not in ["not reported", "n/a", "none"]:
+    if effect_size_reported and effect_size_reported.lower() not in ["not reported", "n/a", "none", ""]:
         score += 0.5
     
-    # Round to nearest integer, cap at 5
     return min(max(round(score), 1), 5)
 
 def format_stars(n):
-    """Format score as emoji stars"""
-    return "⭐" * n + " " * (5 - n)
+    """Format score matching Airtable single select options exactly: '3 ⭐⭐⭐'"""
+    return f"{n} {'⭐' * n}"
 
 # ============================================================================
 # CLAUDE AI EXTRACTION
@@ -372,14 +351,11 @@ Extract the following in JSON format:
 {{
     "evidence_type": "Study design (e.g., 'Meta-analysis', 'RCT', 'Prospective cohort', 'Cross-sectional')",
     "sample_size": "Number of participants or 'Not reported'",
-    "population": "Study population description",
     "biomarkers_studied": ["list", "of", "biomarkers"],
     "key_findings": "2-3 sentence summary of main findings relevant to longevity/healthspan",
     "effect_size": "Quantified effect (HR, OR, correlation, etc.) or 'Not reported'",
-    "age_relevance": "How findings relate to aging/longevity (e.g., 'mortality risk', 'biological age', 'disease incidence')",
     "clinical_relevance": "Practical implications for healthspan optimization",
-    "limitations": "Key study limitations",
-    "intervention_tested": "If applicable, what intervention was studied (e.g., diet, exercise, supplement) or 'Observational only'"
+    "limitations": "Key study limitations"
 }}
 
 Return ONLY valid JSON, no markdown formatting."""
@@ -393,7 +369,6 @@ Return ONLY valid JSON, no markdown formatting."""
         
         text = response.content[0].text.strip()
         
-        # Clean up any markdown formatting
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
         if text.endswith("```"):
@@ -418,47 +393,71 @@ Return ONLY valid JSON, no markdown formatting."""
 def get_next_evidence_id():
     """Generate unique evidence ID"""
     now = datetime.now()
-    return f"LONG_{now.strftime('%m%d%H%M')}{stats['added_to_airtable']:02d}"
+    return f"LONG_{now.strftime('%m%d%H%M%S')}{stats['added_to_airtable']:03d}"
 
 def add_to_airtable(article, extracted, stars, domain):
-    """Upload study to Airtable Clinical_Evidence table"""
+    """Upload study to Airtable Clinical_Evidence table
+    
+    Field mapping verified against Clinical_Evidence table:
+    - evidence_id: Text
+    - study_title: Text
+    - authors_year: Date (YYYY-MM-DD format)
+    - journal: Text
+    - toxin_domain: Single select (DOM_INFLAMMATION, DOM_LIPID, etc.)
+    - evidence_type: Text
+    - sample_size: Text
+    - markers_covered: Text
+    - key_findings: Long text
+    - effect_size: Text
+    - clinical_relevance: Long text
+    - limitations: Long text
+    - evidence_strength_score: Single select ('3 ⭐⭐⭐' format)
+    - source_url: URL
+    """
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    # Prepare biomarkers as comma-separated string
+    # Map domain to exact Airtable single select option
+    mapped_domain = DOMAIN_MAP.get(domain, "DOM_AGING")
+    
+    # Format biomarkers as comma-separated string
     biomarkers = extracted.get("biomarkers_studied", [])
     if isinstance(biomarkers, list):
-        biomarkers_str = ", ".join(biomarkers)
+        biomarkers_str = ", ".join(str(b) for b in biomarkers)
     else:
-        biomarkers_str = str(biomarkers)
+        biomarkers_str = str(biomarkers) if biomarkers else ""
     
+    # Build record with exact field names from Clinical_Evidence table
     record = {
         "fields": {
             "evidence_id": get_next_evidence_id(),
-            "study_title": article["title"][:500],
-            "authors_year": f"{extracted.get('year', '2024')}-01-01",
-            "journal": article["journal"],
-            "toxin_domain": DOMAIN_MAP.get(domain, "DOM_HORMONE"),
-            "evidence_type": extracted.get("evidence_type", ""),
-            "sample_size": str(extracted.get("sample_size", "")),
+            "study_title": str(article.get("title", ""))[:500],
+            "authors_year": f"{article.get('year', '2024')}-01-01",
+            "journal": str(article.get("journal", ""))[:200],
+            "toxin_domain": mapped_domain,
+            "evidence_type": str(extracted.get("evidence_type", ""))[:100],
+            "sample_size": str(extracted.get("sample_size", ""))[:50],
             "markers_covered": biomarkers_str[:1000],
-            "key_findings": extracted.get("key_findings", ""),
-            "effect_size": extracted.get("effect_size", ""),
-            "clinical_relevance": extracted.get("clinical_relevance", ""),
-            "limitations": extracted.get("limitations", ""),
+            "key_findings": str(extracted.get("key_findings", ""))[:2000],
+            "effect_size": str(extracted.get("effect_size", ""))[:200],
+            "clinical_relevance": str(extracted.get("clinical_relevance", ""))[:1000],
+            "limitations": str(extracted.get("limitations", ""))[:1000],
             "evidence_strength_score": format_stars(stars),
-            "source_url": article["url"]
+            "source_url": str(article.get("url", ""))
         }
     }
+    
+    # Remove empty string values to avoid Airtable errors
+    record["fields"] = {k: v for k, v in record["fields"].items() if v and v.strip()}
     
     try:
         response = requests.post(url, headers=headers, json=record, timeout=30)
         response.raise_for_status()
         stats["added_to_airtable"] += 1
-        print(f"   ✅ Added: {format_stars(stars)} | {domain}")
+        print(f"   ✅ Added: {format_stars(stars)} | {mapped_domain}")
         return True
     except requests.exceptions.RequestException as e:
         print(f"   ❌ Airtable error: {e}")
@@ -498,7 +497,7 @@ def load_config():
 def main():
     """Main execution flow"""
     print("=" * 60)
-    print("🧬 LONGEVITY EVIDENCE SCOUT v1.0")
+    print("🧬 LONGEVITY EVIDENCE SCOUT v1.1")
     print("=" * 60)
     print(f"⏰ Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
@@ -510,6 +509,10 @@ def main():
     if not AIRTABLE_API_KEY:
         print("❌ AIRTABLE_API_KEY not set!")
         sys.exit(1)
+    
+    print(f"📊 Airtable Base: {AIRTABLE_BASE_ID}")
+    print(f"📋 Table: {AIRTABLE_TABLE_NAME}")
+    print()
     
     # Load config
     config = load_config()
@@ -525,8 +528,6 @@ def main():
     
     # Load caches
     existing_titles = get_existing_titles()
-    load_biomarker_vocabulary()
-    load_aging_conditions()
     
     # Process each keyword group
     for i, keyword in enumerate(keywords, 1):
@@ -538,6 +539,9 @@ def main():
         print(f"   Found {len(pmids)} articles")
         
         for pmid in pmids:
+            # Rate limiting for PubMed
+            time.sleep(0.4)
+            
             # Fetch abstract
             article = fetch_pubmed_abstract(pmid)
             if not article or not article.get("abstract"):
@@ -576,9 +580,6 @@ def main():
             # Add to Airtable
             if add_to_airtable(article, extracted, stars, domain):
                 existing_titles.add(title_lower)
-            
-            # Rate limiting
-            time.sleep(0.5)
     
     # Print summary
     print("\n" + "=" * 60)
@@ -593,7 +594,6 @@ def main():
     print(f"   ⏰ Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     
-    # Exit cleanly
     sys.exit(0)
 
 if __name__ == "__main__":
