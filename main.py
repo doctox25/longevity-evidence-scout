@@ -324,10 +324,10 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
         score += 0.5
     
     return min(max(round(score), 1), 5)
-
-def format_stars(n):
-    """Format score matching Airtable single select options exactly: '3 ⭐⭐⭐'"""
-    return f"{n} {'⭐' * n}"
+    
+def format_stars(num):
+    """Format star rating as emoji string."""
+    return f"{num} " + "⭐️" * num
 
 # ============================================================================
 # CLAUDE AI EXTRACTION
