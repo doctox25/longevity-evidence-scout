@@ -17,6 +17,21 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from anthropic import Anthropic
 
+# Map longevity domains to ontology domain IDs
+DOMAIN_MAP = {
+    "Inflammation": "DOM_INFLAMMATION",
+    "Cardiovascular": "DOM_LIPID",
+    "Kidney_Liver": "DOM_KIDNEY",
+    "Thyroid_Hormones": "DOM_THYROID",
+    "Hormones": "DOM_HORMONE",
+    "Aging_Metabolism": "DOM_METABOLIC",
+    "Blood_Counts": "DOM_HEMATOLOGY",
+    "Vitamins_Minerals": "DOM_NUTRIENT",
+    "Oxidative_Stress": "DOM_INFLAMMATION",
+    "Longevity_Biomarkers": "DOM_METABOLIC",
+    "General_Longevity": "DOM_METABOLIC",
+}
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -426,7 +441,7 @@ def add_to_airtable(article, extracted, stars, domain):
             "study_title": article["title"][:500],
             "authors_year": f"{extracted.get('year', '2024')}-01-01",
             "journal": article["journal"],
-            "toxin_domain": domain,
+            "toxin_domain": DOMAIN_MAP.get(domain, "DOM_HORMONE"),
             "evidence_type": extracted.get("evidence_type", ""),
             "sample_size": str(extracted.get("sample_size", "")),
             "markers_covered": biomarkers_str[:1000],
