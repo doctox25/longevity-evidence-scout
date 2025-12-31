@@ -134,6 +134,102 @@ TOP_JOURNALS = [
     "frontiers in aging", "experimental gerontology"
 ]
 
+# =============================================================================
+# VALID EVIDENCE TYPES (must match Airtable single select options)
+# =============================================================================
+
+VALID_EVIDENCE_TYPES = [
+    "Meta-analysis", "Systematic Review", "RCT", "Prospective Cohort",
+    "Cohort", "Case-control", "Cross-sectional", "NHANES", "Biomonitoring",
+    "Case Series", "In Vitro", "Animal", "Mechanistic", "Other"
+]
+
+def sanitize_evidence_type(evidence_type):
+    """
+    Sanitize evidence_type to match valid Airtable single select options.
+    Maps common variations and invalid values to valid options.
+    """
+    if not evidence_type:
+        return "Other"
+    
+    et = str(evidence_type).strip().strip('"').strip("'")
+    et_lower = et.lower()
+    
+    # Direct match (case-insensitive)
+    for valid in VALID_EVIDENCE_TYPES:
+        if et_lower == valid.lower():
+            return valid
+    
+    # Map common variations
+    mapping = {
+        "meta analysis": "Meta-analysis",
+        "systematic review and meta-analysis": "Meta-analysis",
+        "systematic review": "Systematic Review",
+        "review": "Systematic Review",
+        "randomized controlled trial": "RCT",
+        "randomised controlled trial": "RCT",
+        "randomized clinical trial": "RCT",
+        "clinical trial": "RCT",
+        "prospective cohort": "Prospective Cohort",
+        "prospective study": "Prospective Cohort",
+        "prospective": "Prospective Cohort",
+        "longitudinal": "Prospective Cohort",
+        "cohort study": "Cohort",
+        "retrospective cohort": "Cohort",
+        "retrospective": "Cohort",
+        "case control": "Case-control",
+        "case-control study": "Case-control",
+        "cross sectional": "Cross-sectional",
+        "cross-sectional study": "Cross-sectional",
+        "population-based": "Cross-sectional",
+        "observational": "Cross-sectional",
+        "nhanes analysis": "NHANES",
+        "nhanes study": "NHANES",
+        "biomonitoring study": "Biomonitoring",
+        "case series": "Case Series",
+        "case report": "Case Series",
+        "in vitro": "In Vitro",
+        "in-vitro": "In Vitro",
+        "animal study": "Animal",
+        "animal model": "Animal",
+        "in vivo": "Animal",
+        "mechanistic study": "Mechanistic",
+        "unknown": "Other",
+        "not reported": "Other",
+        "n/a": "Other",
+        "": "Other",
+    }
+    
+    if et_lower in mapping:
+        return mapping[et_lower]
+    
+    # Partial matching
+    if "meta" in et_lower and "analy" in et_lower:
+        return "Meta-analysis"
+    if "systematic" in et_lower:
+        return "Systematic Review"
+    if "random" in et_lower or "rct" in et_lower:
+        return "RCT"
+    if "prospective" in et_lower or "longitudinal" in et_lower:
+        return "Prospective Cohort"
+    if "cohort" in et_lower:
+        return "Cohort"
+    if "case-control" in et_lower or "case control" in et_lower:
+        return "Case-control"
+    if "cross" in et_lower and "section" in et_lower:
+        return "Cross-sectional"
+    if "nhanes" in et_lower:
+        return "NHANES"
+    if "biomonitor" in et_lower:
+        return "Biomonitoring"
+    if "vitro" in et_lower:
+        return "In Vitro"
+    if "animal" in et_lower or "mouse" in et_lower or "rat" in et_lower:
+        return "Animal"
+    
+    return "Other"
+
+
 # Statistics tracking
 stats = {
     "total_searched": 0,
@@ -631,7 +727,7 @@ def add_to_airtable(article, extracted, stars, domain):
             "journal": str(article.get("journal", ""))[:200],
             "toxin_domain": mapped_domain,
             "condition_id": condition_id or "",  # NEW: Store condition_id
-            "evidence_type": str(extracted.get("evidence_type", ""))[:100],
+            "evidence_type": sanitize_evidence_type(extracted.get("evidence_type", "")),
             "sample_size": str(extracted.get("sample_size", ""))[:50],
             "markers_covered": biomarkers_str[:1000],
             "key_findings": str(extracted.get("key_findings", ""))[:2000],
