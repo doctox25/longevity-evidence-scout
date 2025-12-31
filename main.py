@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
-Longevity Evidence Scout v1.1
+Longevity Evidence Scout v1.2
 Automated discovery of healthspan and blood biomarker research from PubMed
 
-Based on ToxEcology Evidence Scout v2.1 architecture
+Based on ToxEcology Evidence Scout v2.2 architecture
 Adapted for longevity science and blood biomarkers
 
-CORRECTED: Field mappings match Clinical_Evidence table exactly
+v1.2 CHANGES:
+- Added auto-linking to Health_Conditions and Symptom_Clusters
+- Domain → Condition mapping for proper linking
+- Caching system for related tables
+- Improved scoring for cross-sectional/NHANES studies
 """
 
 import os
@@ -38,6 +42,23 @@ DOMAIN_MAP = {
 }
 
 # ============================================================================
+# DOMAIN → CONDITION MAPPING (for auto-linking)
+# Maps toxin_domain values to Health_Conditions condition_id
+# ============================================================================
+
+DOMAIN_TO_CONDITION = {
+    "DOM_INFLAMMATION": "COND_005",    # Chronic Inflammation
+    "DOM_LIPID": "COND_010",           # Dyslipidemia
+    "DOM_HEMATOLOGY": "COND_006",      # Immune Suppression (blood markers)
+    "DOM_METABOLIC": "COND_003",       # Metabolic Syndrome
+    "DOM_HORMONE": "COND_002",         # Hormonal Imbalance
+    "DOM_THYROID": "COND_001",         # Thyroid Dysfunction
+    "DOM_KIDNEY": "COND_020",          # Kidney Dysfunction (also covers liver via COND_013)
+    "DOM_NUTRIENT": "COND_012",        # Detoxification Impairment (nutrient cofactors)
+    "DOM_AGING": "COND_017",           # Mitochondrial Dysfunction (aging/longevity)
+}
+
+# ============================================================================
 # CONFIGURATION
 # ============================================================================
 
@@ -48,6 +69,10 @@ AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 # Airtable configuration
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_CLINICAL_BASE_ID", "app42HAczcSBeZOxD")
 AIRTABLE_TABLE_NAME = "Clinical_Evidence"
+
+# Related tables for auto-linking
+HEALTH_CONDITIONS_TABLE = "Health_Conditions"
+SYMPTOM_CLUSTERS_TABLE = "Symptom_Clusters"
 
 # Domain detection keywords for longevity research
 DOMAIN_KEYWORDS = {
@@ -84,7 +109,7 @@ DOMAIN_KEYWORDS = {
     "Blood_Counts": [
         "hemoglobin", "hematocrit", "rbc", "wbc", "platelet",
         "neutrophil", "lymphocyte", "monocyte", "complete blood count",
-        "anemia", "red blood cell", "white blood cell"
+        "anemia", "red blood cell", "white blood cell", "rdw"
     ],
     "Longevity_Biomarkers": [
         "telomere", "telomerase", "epigenetic clock", "dna methylation",
@@ -98,13 +123,15 @@ DOMAIN_KEYWORDS = {
     ]
 }
 
-# High-impact journals for longevity/aging research
+# High-impact journals for longevity/aging research (expanded)
 TOP_JOURNALS = [
     "nature aging", "cell metabolism", "aging cell",
     "nature medicine", "lancet healthy longevity", "jama",
     "nejm", "lancet", "bmj", "journals of gerontology",
     "geroscience", "aging", "nature", "science", "cell",
-    "annals of internal medicine", "circulation", "diabetes care"
+    "annals of internal medicine", "circulation", "diabetes care",
+    "plos one", "plos medicine", "scientific reports",
+    "frontiers in aging", "experimental gerontology"
 ]
 
 # Statistics tracking
@@ -122,6 +149,15 @@ stats = {
 # ============================================================================
 
 _existing_titles_cache = None
+_health_conditions_cache = None
+_symptom_clusters_cache = None
+
+def get_airtable_headers():
+    """Return standard Airtable API headers"""
+    return {
+        "Authorization": f"Bearer {AIRTABLE_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
 def get_existing_titles():
     """Fetch all existing study titles for duplicate detection"""
@@ -130,7 +166,7 @@ def get_existing_titles():
         return _existing_titles_cache
     
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
-    headers = {"Authorization": f"Bearer {AIRTABLE_API_KEY}"}
+    headers = get_airtable_headers()
     
     titles = set()
     offset = None
@@ -169,6 +205,126 @@ def get_existing_titles():
         _existing_titles_cache = set()
         return _existing_titles_cache
 
+
+def load_health_conditions():
+    """Load Health_Conditions table into cache for auto-linking"""
+    global _health_conditions_cache
+    if _health_conditions_cache is not None:
+        return _health_conditions_cache
+    
+    print("📋 Loading Health_Conditions table...")
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{HEALTH_CONDITIONS_TABLE}"
+    headers = get_airtable_headers()
+    records = []
+    offset = None
+    
+    try:
+        while True:
+            params = {"pageSize": 100}
+            if offset:
+                params["offset"] = offset
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            if response.status_code != 200:
+                print(f"   ⚠️ Error loading Health_Conditions: {response.status_code}")
+                _health_conditions_cache = {}
+                return _health_conditions_cache
+            
+            data = response.json()
+            records.extend(data.get("records", []))
+            
+            offset = data.get("offset")
+            if not offset:
+                break
+        
+        # Build cache: condition_id → Airtable record ID
+        _health_conditions_cache = {}
+        for rec in records:
+            cond_id = rec["fields"].get("condition_id")
+            if cond_id:
+                _health_conditions_cache[cond_id] = rec["id"]
+        
+        print(f"   ✅ Loaded {len(_health_conditions_cache)} health conditions")
+    except Exception as e:
+        print(f"   ⚠️ Exception loading Health_Conditions: {e}")
+        _health_conditions_cache = {}
+    
+    return _health_conditions_cache
+
+
+def load_symptom_clusters():
+    """Load Symptom_Clusters table into cache for auto-linking"""
+    global _symptom_clusters_cache
+    if _symptom_clusters_cache is not None:
+        return _symptom_clusters_cache
+    
+    print("📋 Loading Symptom_Clusters table...")
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{SYMPTOM_CLUSTERS_TABLE}"
+    headers = get_airtable_headers()
+    records = []
+    offset = None
+    
+    try:
+        while True:
+            params = {"pageSize": 100}
+            if offset:
+                params["offset"] = offset
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            if response.status_code != 200:
+                print(f"   ⚠️ Error loading Symptom_Clusters: {response.status_code}")
+                _symptom_clusters_cache = {}
+                return _symptom_clusters_cache
+            
+            data = response.json()
+            records.extend(data.get("records", []))
+            
+            offset = data.get("offset")
+            if not offset:
+                break
+        
+        # Build cache: primary_condition_id → [Airtable record IDs]
+        _symptom_clusters_cache = {}
+        for rec in records:
+            cond_id = rec["fields"].get("primary_condition_id")
+            if cond_id:
+                if cond_id not in _symptom_clusters_cache:
+                    _symptom_clusters_cache[cond_id] = []
+                _symptom_clusters_cache[cond_id].append(rec["id"])
+        
+        print(f"   ✅ Loaded {len(records)} symptom clusters")
+    except Exception as e:
+        print(f"   ⚠️ Exception loading Symptom_Clusters: {e}")
+        _symptom_clusters_cache = {}
+    
+    return _symptom_clusters_cache
+
+
+# ============================================================================
+# LINKING FUNCTIONS
+# ============================================================================
+
+def find_health_condition_link(condition_id):
+    """Find the Airtable record ID for a given condition_id"""
+    if not condition_id:
+        return None
+    cache = load_health_conditions()
+    return cache.get(condition_id)
+
+
+def find_symptom_cluster_links(condition_id):
+    """Find all Symptom_Clusters that match the given condition_id"""
+    if not condition_id:
+        return []
+    cache = load_symptom_clusters()
+    return cache.get(condition_id, [])
+
+
+def get_condition_from_domain(domain):
+    """Map toxin_domain value to condition_id for linking"""
+    return DOMAIN_TO_CONDITION.get(domain)
+
+
 # ============================================================================
 # PUBMED API FUNCTIONS
 # ============================================================================
@@ -202,8 +358,9 @@ def search_pubmed(query, max_results=30, date_after="2024-01-01"):
         stats["errors"] += 1
         return []
 
+
 def fetch_pubmed_abstract(pmid):
-    """Fetch article metadata and abstract from PubMed"""
+    """Fetch article metadata and abstract from PubMed with robust encoding"""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     params = {
         "db": "pubmed",
@@ -215,24 +372,42 @@ def fetch_pubmed_abstract(pmid):
         response = requests.get(base_url, params=params, timeout=30)
         response.raise_for_status()
         
-        root = ET.fromstring(response.content)
+        # Robust encoding handling
+        try:
+            content = response.content.decode('utf-8', errors='replace')
+        except:
+            content = response.text
+        
+        # Remove invalid XML characters
+        content = ''.join(char for char in content if char.isprintable() or char in '\n\r\t')
+        
+        root = ET.fromstring(content.encode('utf-8'))
         article = root.find(".//PubmedArticle")
         
         if article is None:
             return None
         
         title = article.findtext(".//ArticleTitle", "")
-        abstract = article.findtext(".//AbstractText", "")
+        
+        # Handle multiple AbstractText elements (structured abstracts)
+        abstract_parts = []
+        for abstract_elem in article.findall(".//AbstractText"):
+            if abstract_elem.text:
+                label = abstract_elem.get("Label", "")
+                if label:
+                    abstract_parts.append(f"{label}: {abstract_elem.text}")
+                else:
+                    abstract_parts.append(abstract_elem.text)
+        abstract = " ".join(abstract_parts) if abstract_parts else ""
+        
         journal = article.findtext(".//Journal/Title", "")
         year = article.findtext(".//PubDate/Year", "")
         
-        # If year not in PubDate/Year, try MedlineDate
         if not year:
             medline_date = article.findtext(".//PubDate/MedlineDate", "")
             if medline_date:
                 year = medline_date[:4]
         
-        # Default to current year if still not found
         if not year:
             year = str(datetime.now().year)
         
@@ -255,10 +430,15 @@ def fetch_pubmed_abstract(pmid):
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         }
     
+    except ET.ParseError as e:
+        print(f"   ⚠️ XML parse error for {pmid}: {e}")
+        stats["errors"] += 1
+        return None
     except Exception as e:
         print(f"⚠️ Error fetching PMID {pmid}: {e}")
         stats["errors"] += 1
         return None
+
 
 # ============================================================================
 # DOMAIN DETECTION
@@ -278,56 +458,80 @@ def detect_domain(query, abstract):
         return max(domain_scores, key=domain_scores.get)
     return "General_Longevity"
 
+
 # ============================================================================
-# EVIDENCE SCORING
+# EVIDENCE SCORING (v1.2 - Calibrated for longevity/wellness literature)
 # ============================================================================
 
 def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
-    """Calculate evidence strength score (1-5 stars)"""
+    """
+    Calculate evidence strength score (1-5 stars)
+    
+    v1.2 - Calibrated for longevity research:
+    - Cross-sectional/population studies score higher (common in aging research)
+    - Large cohort studies (NHANES, UK Biobank) get sample size bonus
+    - Expanded journal list for aging-specific high-impact journals
+    """
     score = 0
     
     evidence_type_lower = evidence_type.lower() if evidence_type else ""
+    
+    # Evidence type scoring - longevity calibrated
     if "meta-analysis" in evidence_type_lower or "systematic review" in evidence_type_lower:
-        score += 2.0
+        score += 2.5
     elif "randomized" in evidence_type_lower or "rct" in evidence_type_lower:
-        score += 1.8
-    elif "cohort" in evidence_type_lower or "prospective" in evidence_type_lower:
+        score += 2.5
+    elif "prospective cohort" in evidence_type_lower or "longitudinal" in evidence_type_lower:
+        score += 2.0
+    elif "cohort" in evidence_type_lower or "case-control" in evidence_type_lower:
         score += 1.5
-    elif "case-control" in evidence_type_lower:
-        score += 1.0
-    elif "cross-sectional" in evidence_type_lower:
+    elif "cross-sectional" in evidence_type_lower or "nhanes" in evidence_type_lower or "population" in evidence_type_lower:
+        score += 1.0  # Key change: cross-sectional now scores 1.0 (was 0.5)
+    elif "case series" in evidence_type_lower or "case report" in evidence_type_lower:
         score += 0.5
     else:
-        score += 0.3
+        score += 0.5
     
+    # Sample size scoring - calibrated for large population studies
     if sample_size:
         try:
-            n = int(str(sample_size).replace(",", "").split()[0])
+            size_str = str(sample_size).replace(",", "").replace(" ", "")
+            n = int(''.join(filter(str.isdigit, size_str.split()[0] if size_str.split() else size_str)))
+            
             if n >= 10000:
-                score += 1.5
+                score += 1.5  # Large population (UK Biobank, NHANES scale)
             elif n >= 1000:
-                score += 1.2
-            elif n >= 500:
                 score += 1.0
+            elif n >= 500:
+                score += 0.75
             elif n >= 100:
                 score += 0.5
+            elif n >= 50:
+                score += 0.25
         except (ValueError, IndexError):
             pass
     
+    # Journal quality scoring
     journal_lower = journal.lower() if journal else ""
     if any(top in journal_lower for top in TOP_JOURNALS):
         score += 1.0
     else:
-        score += 0.3
+        score += 0.5
     
+    # Effect size reporting bonus
     if effect_size_reported and effect_size_reported.lower() not in ["not reported", "n/a", "none", ""]:
         score += 0.5
+        # Bonus for dose-response or quantified relationships
+        if any(x in effect_size_reported.lower() for x in ["per", "dose", "quartile", "tertile", "trend"]):
+            score += 0.25
     
     return min(max(round(score), 1), 5)
     
+
 def format_stars(num):
     """Format star rating as emoji string."""
     return f"{num} " + "⭐️" * num
+
 
 # ============================================================================
 # CLAUDE AI EXTRACTION
@@ -349,11 +553,11 @@ DETECTED DOMAIN: {domain}
 
 Extract the following in JSON format:
 {{
-    "evidence_type": "Study design (e.g., 'Meta-analysis', 'RCT', 'Prospective cohort', 'Cross-sectional')",
+    "evidence_type": "Study design (e.g., 'Meta-analysis', 'RCT', 'Prospective cohort', 'Cross-sectional', 'NHANES')",
     "sample_size": "Number of participants or 'Not reported'",
     "biomarkers_studied": ["list", "of", "biomarkers"],
     "key_findings": "2-3 sentence summary of main findings relevant to longevity/healthspan",
-    "effect_size": "Quantified effect (HR, OR, correlation, etc.) or 'Not reported'",
+    "effect_size": "Quantified effect (HR, OR, correlation, β, etc.) or 'Not reported'",
     "clinical_relevance": "Practical implications for healthspan optimization",
     "limitations": "Key study limitations"
 }}
@@ -386,8 +590,9 @@ Return ONLY valid JSON, no markdown formatting."""
         stats["errors"] += 1
         return None
 
+
 # ============================================================================
-# AIRTABLE UPLOAD
+# AIRTABLE UPLOAD WITH AUTO-LINKING
 # ============================================================================
 
 def get_next_evidence_id():
@@ -395,33 +600,20 @@ def get_next_evidence_id():
     now = datetime.now()
     return f"LONG_{now.strftime('%m%d%H%M%S')}{stats['added_to_airtable']:03d}"
 
+
 def add_to_airtable(article, extracted, stars, domain):
-    """Upload study to Airtable Clinical_Evidence table
+    """Upload study to Airtable Clinical_Evidence table with auto-linking
     
-    Field mapping verified against Clinical_Evidence table:
-    - evidence_id: Text
-    - study_title: Text
-    - authors_year: Date (YYYY-MM-DD format)
-    - journal: Text
-    - toxin_domain: Single select (DOM_INFLAMMATION, DOM_LIPID, etc.)
-    - evidence_type: Text
-    - sample_size: Text
-    - markers_covered: Text
-    - key_findings: Long text
-    - effect_size: Text
-    - clinical_relevance: Long text
-    - limitations: Long text
-    - evidence_strength_score: Single select ('3 ⭐⭐⭐' format)
-    - source_url: URL
+    v1.2: Now auto-links to Health_Conditions and Symptom_Clusters based on domain
     """
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
-    headers = {
-        "Authorization": f"Bearer {AIRTABLE_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = get_airtable_headers()
     
     # Map domain to exact Airtable single select option
     mapped_domain = DOMAIN_MAP.get(domain, "DOM_AGING")
+    
+    # Get condition_id from domain for linking
+    condition_id = get_condition_from_domain(mapped_domain)
     
     # Format biomarkers as comma-separated string
     biomarkers = extracted.get("biomarkers_studied", [])
@@ -438,6 +630,7 @@ def add_to_airtable(article, extracted, stars, domain):
             "authors_year": f"{article.get('year', '2024')}-01-01",
             "journal": str(article.get("journal", ""))[:200],
             "toxin_domain": mapped_domain,
+            "condition_id": condition_id or "",  # NEW: Store condition_id
             "evidence_type": str(extracted.get("evidence_type", ""))[:100],
             "sample_size": str(extracted.get("sample_size", ""))[:50],
             "markers_covered": biomarkers_str[:1000],
@@ -450,8 +643,29 @@ def add_to_airtable(article, extracted, stars, domain):
         }
     }
     
+    # =========================================================================
+    # AUTO-LINKING (v1.2)
+    # =========================================================================
+    try:
+        # 1. Link to Health_Conditions
+        if condition_id:
+            health_condition_rec_id = find_health_condition_link(condition_id)
+            if health_condition_rec_id:
+                record["fields"]["health_condition_link"] = [health_condition_rec_id]
+                print(f"   🔗 Linked to Health_Conditions: {condition_id}")
+        
+        # 2. Link to Symptom_Clusters
+        if condition_id:
+            symptom_cluster_rec_ids = find_symptom_cluster_links(condition_id)
+            if symptom_cluster_rec_ids:
+                record["fields"]["symptom_clusters_link"] = symptom_cluster_rec_ids
+                print(f"   🔗 Linked to {len(symptom_cluster_rec_ids)} Symptom_Clusters")
+    
+    except Exception as e:
+        print(f"   ⚠️ Linking error (continuing anyway): {e}")
+    
     # Remove empty string values to avoid Airtable errors
-    record["fields"] = {k: v for k, v in record["fields"].items() if v and v.strip()}
+    record["fields"] = {k: v for k, v in record["fields"].items() if v and (not isinstance(v, str) or v.strip())}
     
     try:
         response = requests.post(url, headers=headers, json=record, timeout=30)
@@ -465,6 +679,7 @@ def add_to_airtable(article, extracted, stars, domain):
             print(f"   Response: {e.response.text[:500]}")
         stats["errors"] += 1
         return False
+
 
 # ============================================================================
 # MAIN EXECUTION
@@ -494,10 +709,11 @@ def load_config():
             }
         }
 
+
 def main():
     """Main execution flow"""
     print("=" * 60)
-    print("🧬 LONGEVITY EVIDENCE SCOUT v1.1")
+    print("🧬 LONGEVITY EVIDENCE SCOUT v1.2 (with Auto-Linking)")
     print("=" * 60)
     print(f"⏰ Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
@@ -526,7 +742,15 @@ def main():
     print(f"⭐ Min score threshold: {min_score}")
     print()
     
-    # Load caches
+    # =========================================================================
+    # PRE-LOAD CACHES FOR AUTO-LINKING (v1.2)
+    # =========================================================================
+    print("📥 Loading related tables for auto-linking...")
+    load_health_conditions()
+    load_symptom_clusters()
+    print()
+    
+    # Load existing titles for dedup
     existing_titles = get_existing_titles()
     
     # Process each keyword group
@@ -577,7 +801,7 @@ def main():
                 stats["below_threshold"] += 1
                 continue
             
-            # Add to Airtable
+            # Add to Airtable (now with auto-linking)
             if add_to_airtable(article, extracted, stars, domain):
                 existing_titles.add(title_lower)
     
@@ -595,6 +819,7 @@ def main():
     print("=" * 60)
     
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
