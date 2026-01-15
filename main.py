@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-Longevity Evidence Scout v1.2
+Longevity Evidence Scout v1.3
 Automated discovery of healthspan and blood biomarker research from PubMed
 
 Based on ToxEcology Evidence Scout v2.2 architecture
 Adapted for longevity science and blood biomarkers
+
+v1.3 CHANGES:
+- Loosened PubMed filter (removed redundant longevity/aging AND clause)
+- Added priority keyword system for domain detection (RDW, homocysteine, etc.)
+- Expanded Blood_Counts keywords for better RDW/NLR detection
+- RDW studies now correctly classified instead of defaulting to Inflammation
 
 v1.2 CHANGES:
 - Added auto-linking to Health_Conditions and Symptom_Clusters
@@ -109,7 +115,11 @@ DOMAIN_KEYWORDS = {
     "Blood_Counts": [
         "hemoglobin", "hematocrit", "rbc", "wbc", "platelet",
         "neutrophil", "lymphocyte", "monocyte", "complete blood count",
-        "anemia", "red blood cell", "white blood cell", "rdw"
+        "anemia", "red blood cell", "white blood cell", "rdw",
+        # v1.3: Expanded RDW-specific keywords
+        "red cell distribution width", "anisocytosis", "rdw-cv", "rdw-sd",
+        "erythrocyte heterogeneity", "red cell volume", "mcv variation",
+        "nlr", "neutrophil-to-lymphocyte", "platelet-to-lymphocyte"
     ],
     "Longevity_Biomarkers": [
         "telomere", "telomerase", "epigenetic clock", "dna methylation",
@@ -429,7 +439,10 @@ def search_pubmed(query, max_results=30, date_after="2024-01-01"):
     """Search PubMed and return list of PMIDs"""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     
-    full_query = f"({query}) AND human[MeSH Terms] AND (longevity OR aging OR biomarker OR healthspan)"
+    # v1.3: Loosened filter - only require human studies
+    # Keywords in config.yaml already target longevity/aging context
+    # Adding extra AND clause was filtering out valid mortality/risk studies
+    full_query = f"({query}) AND human[MeSH Terms]"
     
     params = {
         "db": "pubmed",
@@ -540,10 +553,37 @@ def fetch_pubmed_abstract(pmid):
 # DOMAIN DETECTION
 # ============================================================================
 
+# High-priority keywords get extra weight (specific biomarkers beat generic terms)
+PRIORITY_KEYWORDS = {
+    "rdw": "Blood_Counts",
+    "red cell distribution width": "Blood_Counts",
+    "anisocytosis": "Blood_Counts",
+    "nlr": "Blood_Counts",
+    "neutrophil-to-lymphocyte": "Blood_Counts",
+    "homocysteine": "Cardiovascular",
+    "lipoprotein(a)": "Cardiovascular",
+    "lp(a)": "Cardiovascular",
+    "apolipoprotein": "Cardiovascular",
+    "egfr": "Kidney_Liver",
+    "cystatin": "Kidney_Liver",
+    "ggt": "Kidney_Liver",
+    "telomere": "Longevity_Biomarkers",
+    "epigenetic clock": "Longevity_Biomarkers",
+    "biological age": "Longevity_Biomarkers",
+    "nad+": "Longevity_Biomarkers",
+    "sirtuin": "Longevity_Biomarkers",
+}
+
 def detect_domain(query, abstract):
-    """Auto-detect longevity domain based on keywords"""
+    """Auto-detect longevity domain based on keywords with priority weighting"""
     text = (query + " " + abstract).lower()
     
+    # v1.3: Check priority keywords first (specific beats generic)
+    for keyword, domain in PRIORITY_KEYWORDS.items():
+        if keyword in text:
+            return domain
+    
+    # Fall back to keyword counting
     domain_scores = {}
     for domain, keywords in DOMAIN_KEYWORDS.items():
         score = sum(1 for kw in keywords if kw.lower() in text)
@@ -809,7 +849,7 @@ def load_config():
 def main():
     """Main execution flow"""
     print("=" * 60)
-    print("🧬 LONGEVITY EVIDENCE SCOUT v1.2 (with Auto-Linking)")
+    print("🧬 LONGEVITY EVIDENCE SCOUT v1.3 (Priority Domain Detection)")
     print("=" * 60)
     print(f"⏰ Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
