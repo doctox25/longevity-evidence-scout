@@ -1,9 +1,25 @@
 # Longevity Evidence Scout Configuration
-# Version 1.1 | December 2025
-# UPDATED: Added HRT optimization keywords
+# Version 1.2 | January 2026
+# UPDATED: Added comprehensive RDW keywords, loosened search filters
 
 search:
   keywords:
+    # ═══════════════════════════════════════════════════════════
+    # NEW: RDW - RED CELL DISTRIBUTION WIDTH (Inflammaging Marker)
+    # ═══════════════════════════════════════════════════════════
+    # RDW is one of the strongest CBC-based mortality predictors
+    # Elevated RDW with normal hemoglobin = chronic inflammation signal
+    - "red cell distribution width all-cause mortality"
+    - "RDW cardiovascular mortality risk"
+    - "RDW inflammation oxidative stress"
+    - "red cell distribution width inflammaging"
+    - "RDW elevated normal hemoglobin"
+    - "anisocytosis mortality chronic disease"
+    - "RDW C-reactive protein inflammation"
+    - "red cell distribution width frailty aging"
+    - "RDW heart failure prognosis"
+    - "RDW metabolic syndrome diabetes"
+    
     # ═══════════════════════════════════════════════════════════
     # AGING & BIOLOGICAL AGE
     # ═══════════════════════════════════════════════════════════
@@ -53,7 +69,7 @@ search:
     - "thyroid function aging TSH mortality"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: MALE TRT OPTIMIZATION
+    # MALE TRT OPTIMIZATION
     # ═══════════════════════════════════════════════════════════
     - "testosterone replacement therapy cardiovascular safety"
     - "testosterone therapy mortality outcomes men"
@@ -63,7 +79,7 @@ search:
     - "testosterone therapy cognitive function men"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: FEMALE HRT - TIMING & SAFETY
+    # FEMALE HRT - TIMING & SAFETY
     # ═══════════════════════════════════════════════════════════
     - "hormone replacement therapy menopause mortality"
     - "estrogen therapy cardiovascular timing window"
@@ -74,7 +90,7 @@ search:
     - "estradiol progesterone breast cancer risk"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: FEMALE TESTOSTERONE
+    # FEMALE TESTOSTERONE
     # ═══════════════════════════════════════════════════════════
     - "testosterone women cognition mood energy"
     - "testosterone therapy postmenopausal libido"
@@ -82,7 +98,7 @@ search:
     - "female testosterone supplementation outcomes"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: PROGESTERONE & PERIMENOPAUSE
+    # PROGESTERONE & PERIMENOPAUSE
     # ═══════════════════════════════════════════════════════════
     - "progesterone perimenopause symptoms sleep"
     - "micronized progesterone safety outcomes"
@@ -91,7 +107,7 @@ search:
     - "perimenopause hormone decline symptoms"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: EPIGENETIC CLOCKS + HORMONES
+    # EPIGENETIC CLOCKS + HORMONES
     # ═══════════════════════════════════════════════════════════
     - "epigenetic clock hormone replacement therapy"
     - "biological age HRT estrogen testosterone"
@@ -101,7 +117,7 @@ search:
     - "epigenetic aging HRT menopause"
     
     # ═══════════════════════════════════════════════════════════
-    # NEW: MENDELIAN RANDOMIZATION - HORMONES
+    # MENDELIAN RANDOMIZATION - HORMONES
     # ═══════════════════════════════════════════════════════════
     - "mendelian randomization testosterone cardiovascular"
     - "mendelian randomization estrogen longevity"
@@ -120,8 +136,8 @@ search:
     # ═══════════════════════════════════════════════════════════
     - "hemoglobin aging anemia mortality"
     - "neutrophil lymphocyte ratio NLR aging"
-    - "red cell distribution width RDW mortality"
     - "platelet count aging cardiovascular"
+    # Note: RDW moved to dedicated section above
     
     # ═══════════════════════════════════════════════════════════
     # OXIDATIVE STRESS
@@ -140,21 +156,20 @@ search:
     - "senescent cells senolytics aging"
 
   # Date filter - fetch studies from this date forward
-  date_after: "2023-01-01"  # CHANGED: Moved back to catch TRAVERSE and recent HRT studies
+  date_after: "2023-01-01"
   
-  # Max results per keyword group (to stay within API limits)
+  # Max results per keyword group
   max_results: 20
 
 airtable:
-  # UPDATE THESE FOR YOUR AIRTABLE BASE
-  base_id: "app42HAczcSBeZOxD"  # Your Clinical Ontology base ID
+  base_id: "app42HAczcSBeZOxD"
   table_name: "Clinical_Evidence"
 
 scoring:
   # Minimum star rating to save (1-5)
   min_score_to_save: 3
 
-# Longevity domains for classification (EXPANDED)
+# Longevity domains for classification
 domains:
   - Aging_Metabolism
   - Inflammation
@@ -166,8 +181,7 @@ domains:
   - Longevity_Biomarkers
   - Vitamins_Minerals
   - General_Longevity
-  # NEW DOMAINS
-  - Hormone_Optimization    # Male TRT, Female HRT
-  - Epigenetic_Aging        # Clock studies
-  - Female_Hormones         # E2, P4, female T
-  - Male_Hormones           # TRT, T optimization
+  - Hormone_Optimization
+  - Epigenetic_Aging
+  - Female_Hormones
+  - Male_Hormones
