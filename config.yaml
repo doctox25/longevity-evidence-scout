@@ -167,7 +167,7 @@ airtable:
 
 scoring:
   # Minimum star rating to save (1-5)
-  min_score_to_save: 3
+  min_score_to_save: 4
 
 # Longevity domains for classification
 domains:
