@@ -1,14 +1,14 @@
 # Longevity Evidence Scout Configuration
-# Version 1.2 | January 2026
-# UPDATED: Added comprehensive RDW keywords, loosened search filters
+# Version 1.4 | January 2026
+# UPDATED: Added domain_keywords with tight, non-overlapping keyword sets
+# UPDATED: Aligned to DOM_ convention from Airtable ontology
+# UPDATED: Added negative keywords for exclusion logic
 
 search:
   keywords:
     # ═══════════════════════════════════════════════════════════
-    # NEW: RDW - RED CELL DISTRIBUTION WIDTH (Inflammaging Marker)
+    # RDW - RED CELL DISTRIBUTION WIDTH (Inflammaging Marker)
     # ═══════════════════════════════════════════════════════════
-    # RDW is one of the strongest CBC-based mortality predictors
-    # Elevated RDW with normal hemoglobin = chronic inflammation signal
     - "red cell distribution width all-cause mortality"
     - "RDW cardiovascular mortality risk"
     - "RDW inflammation oxidative stress"
@@ -27,6 +27,9 @@ search:
     - "epigenetic clock methylation aging"
     - "telomere length longevity mortality"
     - "inflammaging chronic inflammation aging"
+    - "GrimAge epigenetic aging mortality"
+    - "DunedinPACE biological aging"
+    - "DNA methylation age acceleration"
     
     # ═══════════════════════════════════════════════════════════
     # METABOLIC HEALTH
@@ -35,14 +38,20 @@ search:
     - "HbA1c aging mortality risk"
     - "metabolic health lifespan triglycerides"
     - "fasting glucose healthspan diabetes prevention"
+    - "insulin resistance metabolic syndrome aging"
+    - "HOMA-IR metabolic health longevity"
     
     # ═══════════════════════════════════════════════════════════
-    # CARDIOVASCULAR BIOMARKERS
+    # CARDIOVASCULAR / LIPID BIOMARKERS
     # ═══════════════════════════════════════════════════════════
     - "homocysteine cardiovascular aging"
     - "lipoprotein(a) longevity mortality"
     - "apolipoprotein B cardiovascular risk aging"
-    - "blood pressure aging vascular health"
+    - "LDL cholesterol mortality cardiovascular"
+    - "HDL cholesterol longevity outcomes"
+    - "triglycerides cardiovascular risk aging"
+    - "ApoB particle number cardiovascular"
+    - "Lp(a) cardiovascular disease risk"
     
     # ═══════════════════════════════════════════════════════════
     # INFLAMMATION MARKERS
@@ -51,25 +60,35 @@ search:
     - "interleukin-6 IL-6 inflammaging"
     - "cytokines aging chronic disease"
     - "high-sensitivity CRP cardiovascular longevity"
+    - "TNF-alpha inflammation aging"
     
     # ═══════════════════════════════════════════════════════════
-    # ORGAN FUNCTION
+    # KIDNEY FUNCTION
     # ═══════════════════════════════════════════════════════════
     - "eGFR kidney function aging mortality"
     - "cystatin C renal aging"
+    - "creatinine kidney aging mortality"
+    - "chronic kidney disease biomarkers aging"
+    
+    # ═══════════════════════════════════════════════════════════
+    # LIVER FUNCTION
+    # ═══════════════════════════════════════════════════════════
     - "liver enzymes GGT longevity"
     - "albumin aging frailty mortality"
+    - "ALT AST liver function aging"
+    - "fatty liver disease biomarkers"
     
     # ═══════════════════════════════════════════════════════════
-    # HORMONES & METABOLISM (EXPANDED)
+    # THYROID (TSH, T3, T4 only - NOT sex hormones)
     # ═══════════════════════════════════════════════════════════
-    - "testosterone aging healthspan men"
-    - "DHEA aging biomarker longevity"
-    - "IGF-1 growth hormone aging"
     - "thyroid function aging TSH mortality"
+    - "TSH T3 T4 longevity outcomes"
+    - "subclinical hypothyroidism aging"
+    - "free T3 free T4 mortality"
+    - "Hashimoto thyroiditis outcomes"
     
     # ═══════════════════════════════════════════════════════════
-    # MALE TRT OPTIMIZATION
+    # HORMONES - MALE TRT
     # ═══════════════════════════════════════════════════════════
     - "testosterone replacement therapy cardiovascular safety"
     - "testosterone therapy mortality outcomes men"
@@ -77,9 +96,10 @@ search:
     - "hypogonadism treatment cardiovascular"
     - "testosterone deficiency all-cause mortality"
     - "testosterone therapy cognitive function men"
+    - "free testosterone SHBG men aging"
     
     # ═══════════════════════════════════════════════════════════
-    # FEMALE HRT - TIMING & SAFETY
+    # HORMONES - FEMALE HRT
     # ═══════════════════════════════════════════════════════════
     - "hormone replacement therapy menopause mortality"
     - "estrogen therapy cardiovascular timing window"
@@ -88,9 +108,10 @@ search:
     - "bioidentical hormone therapy outcomes"
     - "transdermal estrogen VTE thrombosis risk"
     - "estradiol progesterone breast cancer risk"
+    - "SHBG estrogen women aging"
     
     # ═══════════════════════════════════════════════════════════
-    # FEMALE TESTOSTERONE
+    # HORMONES - FEMALE TESTOSTERONE
     # ═══════════════════════════════════════════════════════════
     - "testosterone women cognition mood energy"
     - "testosterone therapy postmenopausal libido"
@@ -98,13 +119,21 @@ search:
     - "female testosterone supplementation outcomes"
     
     # ═══════════════════════════════════════════════════════════
-    # PROGESTERONE & PERIMENOPAUSE
+    # HORMONES - PROGESTERONE & PERIMENOPAUSE
     # ═══════════════════════════════════════════════════════════
     - "progesterone perimenopause symptoms sleep"
     - "micronized progesterone safety outcomes"
     - "luteal phase deficiency treatment"
     - "progesterone anxiety mood sleep"
     - "perimenopause hormone decline symptoms"
+    
+    # ═══════════════════════════════════════════════════════════
+    # HORMONES - OTHER (DHEA, Cortisol, IGF-1)
+    # ═══════════════════════════════════════════════════════════
+    - "DHEA aging biomarker longevity"
+    - "IGF-1 growth hormone aging mortality"
+    - "cortisol aging stress HPA axis"
+    - "pregnenolone neurosteroid aging"
     
     # ═══════════════════════════════════════════════════════════
     # EPIGENETIC CLOCKS + HORMONES
@@ -114,7 +143,6 @@ search:
     - "GrimAge hormone therapy aging"
     - "DunedinPACE estrogen testosterone"
     - "DNA methylation age hormone intervention"
-    - "epigenetic aging HRT menopause"
     
     # ═══════════════════════════════════════════════════════════
     # MENDELIAN RANDOMIZATION - HORMONES
@@ -130,14 +158,16 @@ search:
     - "vitamin B12 cognitive aging"
     - "omega-3 fatty acids longevity inflammation"
     - "ferritin iron status aging"
+    - "magnesium deficiency cardiovascular aging"
+    - "zinc immune function aging"
     
     # ═══════════════════════════════════════════════════════════
-    # BLOOD COUNTS & HEMATOLOGY
+    # HEMATOLOGY / BLOOD COUNTS
     # ═══════════════════════════════════════════════════════════
     - "hemoglobin aging anemia mortality"
     - "neutrophil lymphocyte ratio NLR aging"
     - "platelet count aging cardiovascular"
-    # Note: RDW moved to dedicated section above
+    - "mean corpuscular volume MCV aging"
     
     # ═══════════════════════════════════════════════════════════
     # OXIDATIVE STRESS
@@ -145,6 +175,15 @@ search:
     - "oxidative stress biomarkers aging"
     - "glutathione antioxidant longevity"
     - "lipid peroxidation aging disease"
+    - "8-OHdG oxidative DNA damage aging"
+    
+    # ═══════════════════════════════════════════════════════════
+    # METHYLATION
+    # ═══════════════════════════════════════════════════════════
+    - "homocysteine methylation MTHFR"
+    - "folate B12 methylation aging"
+    - "SAMe methylation longevity"
+    - "one-carbon metabolism aging"
     
     # ═══════════════════════════════════════════════════════════
     # LONGEVITY PATHWAYS
@@ -155,33 +194,433 @@ search:
     - "autophagy biomarkers longevity"
     - "senescent cells senolytics aging"
 
-  # Date filter - fetch studies from this date forward
   date_after: "2023-01-01"
-  
-  # Max results per keyword group
   max_results: 20
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DOMAIN KEYWORDS - Tight, non-overlapping keyword sets
+# Used for automatic domain classification of studies
+# ═══════════════════════════════════════════════════════════════════════════
+
+domain_keywords:
+  # ---------------------------------------------------------------------------
+  # DOM_HORMONE - Sex hormones, HRT, TRT (NOT thyroid)
+  # ---------------------------------------------------------------------------
+  DOM_HORMONE:
+    primary:
+      - testosterone
+      - estrogen
+      - estradiol
+      - progesterone
+      - SHBG
+      - sex hormone
+      - androgen
+      - hypogonadism
+      - TRT
+      - HRT
+      - hormone replacement
+      - menopause
+      - perimenopause
+      - postmenopausal
+      - DHEA
+      - pregnenolone
+      - cortisol
+      - IGF-1
+      - growth hormone
+      - libido
+      - erectile
+      - ovarian
+      - luteal
+      - follicular
+      - FSH
+      - LH
+      - gonadotropin
+      - aromatase
+      - 5-alpha reductase
+      - DHT
+      - dihydrotestosterone
+      - bioidentical
+      - transdermal estrogen
+      - topical testosterone
+    negative:
+      - TSH
+      - thyroid
+      - T3
+      - T4
+      - Hashimoto
+      - hypothyroid
+      - hyperthyroid
+      - Graves
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_THYROID - Thyroid function ONLY
+  # ---------------------------------------------------------------------------
+  DOM_THYROID:
+    primary:
+      - TSH
+      - thyroid
+      - T3
+      - T4
+      - free T3
+      - free T4
+      - thyroxine
+      - triiodothyronine
+      - Hashimoto
+      - hypothyroid
+      - hyperthyroid
+      - Graves
+      - thyroiditis
+      - thyroid peroxidase
+      - TPO
+      - thyroglobulin
+      - subclinical hypothyroidism
+      - subclinical hyperthyroidism
+      - levothyroxine
+      - euthyroid
+    negative:
+      - testosterone
+      - estrogen
+      - sex hormone
+      - SHBG
+      - TRT
+      - HRT
+      - menopause
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_HEMATOLOGY - Blood counts, RDW, CBC markers
+  # ---------------------------------------------------------------------------
+  DOM_HEMATOLOGY:
+    primary:
+      - RDW
+      - red cell distribution width
+      - anisocytosis
+      - hemoglobin
+      - hematocrit
+      - MCV
+      - MCH
+      - MCHC
+      - RBC
+      - red blood cell
+      - WBC
+      - white blood cell
+      - platelet
+      - neutrophil
+      - lymphocyte
+      - monocyte
+      - eosinophil
+      - basophil
+      - NLR
+      - neutrophil-to-lymphocyte
+      - PLR
+      - platelet-to-lymphocyte
+      - complete blood count
+      - CBC
+      - anemia
+      - polycythemia
+      - leukocyte
+      - erythrocyte
+      - reticulocyte
+    negative:
+      - Alzheimer
+      - dementia
+      - neurodegeneration
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_LIPID - Cholesterol, lipoproteins, cardiovascular lipids
+  # ---------------------------------------------------------------------------
+  DOM_LIPID:
+    primary:
+      - LDL
+      - HDL
+      - cholesterol
+      - triglyceride
+      - ApoB
+      - apolipoprotein B
+      - Lp(a)
+      - lipoprotein(a)
+      - VLDL
+      - lipid panel
+      - dyslipidemia
+      - hyperlipidemia
+      - statin
+      - lipid-lowering
+      - atherogenic
+      - remnant cholesterol
+      - small dense LDL
+      - LDL particle
+      - non-HDL
+      - total cholesterol
+    negative:
+      - Alzheimer
+      - dementia
+      - neurodegeneration
+      - testosterone
+      - estrogen
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_INFLAMMATION - CRP, cytokines, inflammatory markers
+  # ---------------------------------------------------------------------------
+  DOM_INFLAMMATION:
+    primary:
+      - CRP
+      - C-reactive protein
+      - hsCRP
+      - high-sensitivity CRP
+      - interleukin
+      - IL-6
+      - IL-1
+      - TNF
+      - tumor necrosis factor
+      - cytokine
+      - inflammaging
+      - chronic inflammation
+      - systemic inflammation
+      - inflammatory marker
+      - NF-kB
+      - inflammasome
+      - proinflammatory
+      - anti-inflammatory
+      - inflammatory cascade
+    negative:
+      - RDW
+      - red cell distribution
+    title_weight: 2
+
+  # ---------------------------------------------------------------------------
+  # DOM_METABOLIC - Glucose, insulin, metabolic syndrome
+  # ---------------------------------------------------------------------------
+  DOM_METABOLIC:
+    primary:
+      - glucose
+      - insulin
+      - HbA1c
+      - hemoglobin A1c
+      - fasting glucose
+      - OGTT
+      - oral glucose tolerance
+      - insulin resistance
+      - insulin sensitivity
+      - HOMA-IR
+      - metabolic syndrome
+      - prediabetes
+      - diabetes
+      - glycemic
+      - hyperglycemia
+      - hyperinsulinemia
+      - beta cell
+      - pancreatic
+      - glucagon
+      - incretin
+      - GLP-1
+    negative:
+      - Alzheimer
+      - dementia
+    title_weight: 2
+
+  # ---------------------------------------------------------------------------
+  # DOM_KIDNEY - Renal function markers
+  # ---------------------------------------------------------------------------
+  DOM_KIDNEY:
+    primary:
+      - eGFR
+      - creatinine
+      - cystatin C
+      - BUN
+      - blood urea nitrogen
+      - kidney function
+      - renal function
+      - chronic kidney disease
+      - CKD
+      - nephropathy
+      - proteinuria
+      - albuminuria
+      - microalbuminuria
+      - uric acid
+      - glomerular filtration
+      - renal impairment
+    negative: []
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_LIVER - Hepatic function markers
+  # ---------------------------------------------------------------------------
+  DOM_LIVER:
+    primary:
+      - ALT
+      - AST
+      - GGT
+      - gamma-glutamyl
+      - alkaline phosphatase
+      - ALP
+      - bilirubin
+      - albumin
+      - liver function
+      - hepatic function
+      - fatty liver
+      - NAFLD
+      - NASH
+      - hepatic steatosis
+      - liver enzyme
+      - hepatocyte
+      - cirrhosis
+      - fibrosis
+      - FIB-4
+    negative: []
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_AGING - Biological age, epigenetic clocks, longevity pathways
+  # ---------------------------------------------------------------------------
+  DOM_AGING:
+    primary:
+      - biological age
+      - epigenetic clock
+      - DNA methylation age
+      - telomere
+      - telomerase
+      - GrimAge
+      - PhenoAge
+      - DunedinPACE
+      - Horvath clock
+      - Hannum clock
+      - senescence
+      - senescent cell
+      - senolytics
+      - senomorphic
+      - NAD+
+      - nicotinamide
+      - sirtuin
+      - SIRT1
+      - AMPK
+      - mTOR
+      - autophagy
+      - mitochondrial dysfunction
+      - healthspan
+      - lifespan
+      - longevity pathway
+      - aging hallmarks
+      - GDF-15
+      - Klotho
+    negative: []
+    title_weight: 3
+
+  # ---------------------------------------------------------------------------
+  # DOM_OXIDATIVE - Oxidative stress markers
+  # ---------------------------------------------------------------------------
+  DOM_OXIDATIVE:
+    primary:
+      - oxidative stress
+      - reactive oxygen species
+      - ROS
+      - antioxidant
+      - glutathione
+      - GSH
+      - malondialdehyde
+      - MDA
+      - 8-OHdG
+      - isoprostanes
+      - lipid peroxidation
+      - superoxide dismutase
+      - SOD
+      - catalase
+      - oxidative damage
+      - free radical
+      - redox
+      - Nrf2
+      - oxidized LDL
+    negative: []
+    title_weight: 2
+
+  # ---------------------------------------------------------------------------
+  # DOM_NUTRIENT - Vitamins, minerals, nutritional markers
+  # ---------------------------------------------------------------------------
+  DOM_NUTRIENT:
+    primary:
+      - vitamin D
+      - 25-hydroxyvitamin
+      - vitamin B12
+      - cobalamin
+      - folate
+      - folic acid
+      - vitamin B6
+      - ferritin
+      - iron
+      - transferrin
+      - zinc
+      - magnesium
+      - selenium
+      - copper
+      - omega-3
+      - EPA
+      - DHA
+      - vitamin K
+      - vitamin A
+      - retinol
+      - vitamin E
+      - tocopherol
+      - vitamin C
+      - ascorbic acid
+      - deficiency
+      - insufficiency
+      - micronutrient
+    negative: []
+    title_weight: 2
+
+  # ---------------------------------------------------------------------------
+  # DOM_METHYLATION - Methylation cycle markers
+  # ---------------------------------------------------------------------------
+  DOM_METHYLATION:
+    primary:
+      - homocysteine
+      - methylation
+      - MTHFR
+      - methyl donor
+      - SAMe
+      - S-adenosylmethionine
+      - SAH
+      - one-carbon metabolism
+      - methionine cycle
+      - betaine
+      - choline
+      - methylcobalamin
+      - methylfolate
+      - hyperhomocysteinemia
+    negative: []
+    title_weight: 3
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AIRTABLE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
 
 airtable:
   base_id: "app42HAczcSBeZOxD"
   table_name: "Clinical_Evidence"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# SCORING CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
 scoring:
-  # Minimum star rating to save (1-5)
   min_score_to_save: 4
 
-# Longevity domains for classification
+# ═══════════════════════════════════════════════════════════════════════════
+# DOMAINS LIST (for reference - actual classification uses domain_keywords)
+# ═══════════════════════════════════════════════════════════════════════════
+
 domains:
-  - Aging_Metabolism
-  - Inflammation
-  - Oxidative_Stress
-  - Cardiovascular
-  - Kidney_Liver
-  - Thyroid_Hormones
-  - Blood_Counts
-  - Longevity_Biomarkers
-  - Vitamins_Minerals
-  - General_Longevity
-  - Hormone_Optimization
-  - Epigenetic_Aging
-  - Female_Hormones
-  - Male_Hormones
+  - DOM_AGING
+  - DOM_HEMATOLOGY
+  - DOM_HORMONE
+  - DOM_INFLAMMATION
+  - DOM_KIDNEY
+  - DOM_LIPID
+  - DOM_LIVER
+  - DOM_METABOLIC
+  - DOM_METHYLATION
+  - DOM_NUTRIENT
+  - DOM_OXIDATIVE
+  - DOM_THYROID
