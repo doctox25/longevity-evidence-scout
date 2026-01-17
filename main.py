@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 """
-Longevity Evidence Scout v1.3
+Longevity Evidence Scout v1.4
 Automated discovery of healthspan and blood biomarker research from PubMed
 
 Based on ToxEcology Evidence Scout v2.2 architecture
 Adapted for longevity science and blood biomarkers
 
+v1.4 CHANGES:
+- NEW: domain_keywords loaded from config.yaml with tight, non-overlapping sets
+- NEW: Title weighting (3x default) for domain detection
+- NEW: Negative keyword exclusions to prevent misclassification
+- NEW: Direct DOM_ convention (no intermediate mapping)
+- FIXED: Sex hormones no longer classified as DOM_THYROID
+- FIXED: RDW studies correctly go to DOM_HEMATOLOGY
+
 v1.3 CHANGES:
 - Loosened PubMed filter (removed redundant longevity/aging AND clause)
-- Added priority keyword system for domain detection (RDW, homocysteine, etc.)
+- Added priority keyword system for domain detection
 - Expanded Blood_Counts keywords for better RDW/NLR detection
-- RDW studies now correctly classified instead of defaulting to Inflammation
 
 v1.2 CHANGES:
 - Added auto-linking to Health_Conditions and Symptom_Clusters
 - Domain → Condition mapping for proper linking
 - Caching system for related tables
-- Improved scoring for cross-sectional/NHANES studies
 """
 
 import os
@@ -30,24 +36,6 @@ from datetime import datetime
 from anthropic import Anthropic
 
 # ============================================================================
-# DOMAIN MAPPING - Must match toxin_domain single select options exactly
-# ============================================================================
-
-DOMAIN_MAP = {
-    "Inflammation": "DOM_INFLAMMATION",
-    "Cardiovascular": "DOM_LIPID",
-    "Kidney_Liver": "DOM_KIDNEY",
-    "Thyroid_Hormones": "DOM_THYROID",
-    "Hormones": "DOM_HORMONE",
-    "Aging_Metabolism": "DOM_METABOLIC",
-    "Blood_Counts": "DOM_HEMATOLOGY",
-    "Vitamins_Minerals": "DOM_NUTRIENT",
-    "Oxidative_Stress": "DOM_INFLAMMATION",
-    "Longevity_Biomarkers": "DOM_AGING",
-    "General_Longevity": "DOM_AGING",
-}
-
-# ============================================================================
 # DOMAIN → CONDITION MAPPING (for auto-linking)
 # Maps toxin_domain values to Health_Conditions condition_id
 # ============================================================================
@@ -59,81 +47,28 @@ DOMAIN_TO_CONDITION = {
     "DOM_METABOLIC": "COND_003",       # Metabolic Syndrome
     "DOM_HORMONE": "COND_002",         # Hormonal Imbalance
     "DOM_THYROID": "COND_001",         # Thyroid Dysfunction
-    "DOM_KIDNEY": "COND_020",          # Kidney Dysfunction (also covers liver via COND_013)
+    "DOM_KIDNEY": "COND_020",          # Kidney Dysfunction
+    "DOM_LIVER": "COND_013",           # Liver Dysfunction
     "DOM_NUTRIENT": "COND_012",        # Detoxification Impairment (nutrient cofactors)
     "DOM_AGING": "COND_017",           # Mitochondrial Dysfunction (aging/longevity)
+    "DOM_OXIDATIVE": "COND_005",       # Maps to Chronic Inflammation
+    "DOM_METHYLATION": "COND_012",     # Maps to Detoxification Impairment
 }
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-# API Keys from environment
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 
-# Airtable configuration
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_CLINICAL_BASE_ID", "app42HAczcSBeZOxD")
 AIRTABLE_TABLE_NAME = "Clinical_Evidence"
 
-# Related tables for auto-linking
 HEALTH_CONDITIONS_TABLE = "Health_Conditions"
 SYMPTOM_CLUSTERS_TABLE = "Symptom_Clusters"
 
-# Domain detection keywords for longevity research
-DOMAIN_KEYWORDS = {
-    "Aging_Metabolism": [
-        "glucose", "insulin", "hba1c", "fasting glucose", "ogtt",
-        "metabolic", "diabetes", "prediabetes", "insulin resistance",
-        "triglycerides", "cholesterol", "ldl", "hdl", "apob"
-    ],
-    "Inflammation": [
-        "crp", "c-reactive protein", "hscrp", "interleukin", "il-6",
-        "tnf-alpha", "inflammation", "inflammatory", "cytokine",
-        "inflammaging", "chronic inflammation", "nf-kb"
-    ],
-    "Oxidative_Stress": [
-        "oxidative stress", "reactive oxygen", "ros", "antioxidant",
-        "glutathione", "malondialdehyde", "8-ohdg", "isoprostanes",
-        "lipid peroxidation", "superoxide dismutase", "catalase"
-    ],
-    "Cardiovascular": [
-        "homocysteine", "lp(a)", "lipoprotein", "apolipoprotein",
-        "arterial stiffness", "pulse wave", "carotid", "atherosclerosis",
-        "endothelial", "blood pressure", "hypertension", "cardiovascular"
-    ],
-    "Kidney_Liver": [
-        "creatinine", "egfr", "bun", "cystatin c", "uric acid",
-        "alt", "ast", "ggt", "albumin", "bilirubin", "liver function",
-        "kidney function", "renal", "hepatic"
-    ],
-    "Thyroid_Hormones": [
-        "tsh", "t3", "t4", "thyroid", "free t3", "free t4",
-        "testosterone", "estrogen", "dhea", "cortisol", "hormone",
-        "endocrine", "igf-1", "growth hormone"
-    ],
-    "Blood_Counts": [
-        "hemoglobin", "hematocrit", "rbc", "wbc", "platelet",
-        "neutrophil", "lymphocyte", "monocyte", "complete blood count",
-        "anemia", "red blood cell", "white blood cell", "rdw",
-        # v1.3: Expanded RDW-specific keywords
-        "red cell distribution width", "anisocytosis", "rdw-cv", "rdw-sd",
-        "erythrocyte heterogeneity", "red cell volume", "mcv variation",
-        "nlr", "neutrophil-to-lymphocyte", "platelet-to-lymphocyte"
-    ],
-    "Longevity_Biomarkers": [
-        "telomere", "telomerase", "epigenetic clock", "dna methylation",
-        "biological age", "senescence", "senolytics", "nad+", "sirtuin",
-        "ampk", "mtor", "autophagy", "mitochondrial function"
-    ],
-    "Vitamins_Minerals": [
-        "vitamin d", "25-hydroxyvitamin", "vitamin b12", "folate",
-        "ferritin", "iron", "zinc", "magnesium", "selenium",
-        "omega-3", "vitamin k", "deficiency"
-    ]
-}
-
-# High-impact journals for longevity/aging research (expanded)
+# High-impact journals for longevity/aging research
 TOP_JOURNALS = [
     "nature aging", "cell metabolism", "aging cell",
     "nature medicine", "lancet healthy longevity", "jama",
@@ -155,22 +90,17 @@ VALID_EVIDENCE_TYPES = [
 ]
 
 def sanitize_evidence_type(evidence_type):
-    """
-    Sanitize evidence_type to match valid Airtable single select options.
-    Maps common variations and invalid values to valid options.
-    """
+    """Sanitize evidence_type to match valid Airtable single select options."""
     if not evidence_type:
         return "Other"
     
     et = str(evidence_type).strip().strip('"').strip("'")
     et_lower = et.lower()
     
-    # Direct match (case-insensitive)
     for valid in VALID_EVIDENCE_TYPES:
         if et_lower == valid.lower():
             return valid
     
-    # Map common variations
     mapping = {
         "meta analysis": "Meta-analysis",
         "systematic review and meta-analysis": "Meta-analysis",
@@ -213,7 +143,6 @@ def sanitize_evidence_type(evidence_type):
     if et_lower in mapping:
         return mapping[et_lower]
     
-    # Partial matching
     if "meta" in et_lower and "analy" in et_lower:
         return "Meta-analysis"
     if "systematic" in et_lower:
@@ -259,7 +188,6 @@ _health_conditions_cache = None
 _symptom_clusters_cache = None
 
 def get_airtable_headers():
-    """Return standard Airtable API headers"""
     return {
         "Authorization": f"Bearer {AIRTABLE_API_KEY}",
         "Content-Type": "application/json"
@@ -343,7 +271,6 @@ def load_health_conditions():
             if not offset:
                 break
         
-        # Build cache: condition_id → Airtable record ID
         _health_conditions_cache = {}
         for rec in records:
             cond_id = rec["fields"].get("condition_id")
@@ -389,7 +316,6 @@ def load_symptom_clusters():
             if not offset:
                 break
         
-        # Build cache: primary_condition_id → [Airtable record IDs]
         _symptom_clusters_cache = {}
         for rec in records:
             cond_id = rec["fields"].get("primary_condition_id")
@@ -411,7 +337,6 @@ def load_symptom_clusters():
 # ============================================================================
 
 def find_health_condition_link(condition_id):
-    """Find the Airtable record ID for a given condition_id"""
     if not condition_id:
         return None
     cache = load_health_conditions()
@@ -419,7 +344,6 @@ def find_health_condition_link(condition_id):
 
 
 def find_symptom_cluster_links(condition_id):
-    """Find all Symptom_Clusters that match the given condition_id"""
     if not condition_id:
         return []
     cache = load_symptom_clusters()
@@ -427,7 +351,6 @@ def find_symptom_cluster_links(condition_id):
 
 
 def get_condition_from_domain(domain):
-    """Map toxin_domain value to condition_id for linking"""
     return DOMAIN_TO_CONDITION.get(domain)
 
 
@@ -439,9 +362,6 @@ def search_pubmed(query, max_results=30, date_after="2024-01-01"):
     """Search PubMed and return list of PMIDs"""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     
-    # v1.3: Loosened filter - only require human studies
-    # Keywords in config.yaml already target longevity/aging context
-    # Adding extra AND clause was filtering out valid mortality/risk studies
     full_query = f"({query}) AND human[MeSH Terms]"
     
     params = {
@@ -469,7 +389,7 @@ def search_pubmed(query, max_results=30, date_after="2024-01-01"):
 
 
 def fetch_pubmed_abstract(pmid):
-    """Fetch article metadata and abstract from PubMed with robust encoding"""
+    """Fetch article metadata and abstract from PubMed"""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     params = {
         "db": "pubmed",
@@ -481,13 +401,11 @@ def fetch_pubmed_abstract(pmid):
         response = requests.get(base_url, params=params, timeout=30)
         response.raise_for_status()
         
-        # Robust encoding handling
         try:
             content = response.content.decode('utf-8', errors='replace')
         except:
             content = response.text
         
-        # Remove invalid XML characters
         content = ''.join(char for char in content if char.isprintable() or char in '\n\r\t')
         
         root = ET.fromstring(content.encode('utf-8'))
@@ -498,7 +416,6 @@ def fetch_pubmed_abstract(pmid):
         
         title = article.findtext(".//ArticleTitle", "")
         
-        # Handle multiple AbstractText elements (structured abstracts)
         abstract_parts = []
         for abstract_elem in article.findall(".//AbstractText"):
             if abstract_elem.text:
@@ -550,69 +467,148 @@ def fetch_pubmed_abstract(pmid):
 
 
 # ============================================================================
-# DOMAIN DETECTION
+# DOMAIN DETECTION v1.4 - Title Weighting + Negative Keywords
 # ============================================================================
 
-# High-priority keywords get extra weight (specific biomarkers beat generic terms)
-PRIORITY_KEYWORDS = {
-    "rdw": "Blood_Counts",
-    "red cell distribution width": "Blood_Counts",
-    "anisocytosis": "Blood_Counts",
-    "nlr": "Blood_Counts",
-    "neutrophil-to-lymphocyte": "Blood_Counts",
-    "homocysteine": "Cardiovascular",
-    "lipoprotein(a)": "Cardiovascular",
-    "lp(a)": "Cardiovascular",
-    "apolipoprotein": "Cardiovascular",
-    "egfr": "Kidney_Liver",
-    "cystatin": "Kidney_Liver",
-    "ggt": "Kidney_Liver",
-    "telomere": "Longevity_Biomarkers",
-    "epigenetic clock": "Longevity_Biomarkers",
-    "biological age": "Longevity_Biomarkers",
-    "nad+": "Longevity_Biomarkers",
-    "sirtuin": "Longevity_Biomarkers",
-}
+# Global cache for domain keywords loaded from config
+_domain_keywords_cache = None
 
-def detect_domain(query, abstract):
-    """Auto-detect longevity domain based on keywords with priority weighting"""
-    text = (query + " " + abstract).lower()
+def load_domain_keywords(config):
+    """Load domain_keywords from config.yaml into global cache"""
+    global _domain_keywords_cache
+    if _domain_keywords_cache is not None:
+        return _domain_keywords_cache
     
-    # v1.3: Check priority keywords first (specific beats generic)
-    for keyword, domain in PRIORITY_KEYWORDS.items():
-        if keyword in text:
-            return domain
+    _domain_keywords_cache = config.get("domain_keywords", {})
+    if _domain_keywords_cache:
+        print(f"📋 Loaded domain_keywords for {len(_domain_keywords_cache)} domains")
+    else:
+        print("⚠️ No domain_keywords in config, using fallback detection")
     
-    # Fall back to keyword counting
+    return _domain_keywords_cache
+
+
+def detect_domain(title, abstract, query, config):
+    """
+    Auto-detect longevity domain using:
+    1. Title weighting (keywords in title count 3x by default)
+    2. Negative keyword exclusions
+    3. Primary keyword matching
+    
+    v1.4: Now uses domain_keywords from config.yaml
+    """
+    domain_keywords = load_domain_keywords(config)
+    
+    if not domain_keywords:
+        # Fallback to simple keyword detection if no config
+        return _detect_domain_fallback(title, abstract, query)
+    
+    title_lower = title.lower()
+    abstract_lower = abstract.lower()
+    query_lower = query.lower()
+    
+    # Combine all text for searching
+    full_text = f"{title_lower} {abstract_lower} {query_lower}"
+    
     domain_scores = {}
-    for domain, keywords in DOMAIN_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw.lower() in text)
+    
+    for domain, keywords_config in domain_keywords.items():
+        primary = keywords_config.get("primary", [])
+        negative = keywords_config.get("negative", [])
+        title_weight = keywords_config.get("title_weight", 3)
+        
+        # Check negative keywords first - if any match, skip this domain
+        has_negative = False
+        for neg_kw in negative:
+            if neg_kw.lower() in full_text:
+                has_negative = True
+                break
+        
+        if has_negative:
+            continue
+        
+        # Score based on primary keywords
+        score = 0
+        for kw in primary:
+            kw_lower = kw.lower()
+            
+            # Title matches get weighted score
+            if kw_lower in title_lower:
+                score += title_weight
+            
+            # Abstract/query matches get normal score
+            if kw_lower in abstract_lower or kw_lower in query_lower:
+                score += 1
+        
         if score > 0:
             domain_scores[domain] = score
     
     if domain_scores:
-        return max(domain_scores, key=domain_scores.get)
-    return "General_Longevity"
+        best_domain = max(domain_scores, key=domain_scores.get)
+        best_score = domain_scores[best_domain]
+        
+        # Debug output for domain detection
+        print(f"   🎯 Domain scores: {dict(sorted(domain_scores.items(), key=lambda x: -x[1])[:3])}")
+        print(f"   ✓ Selected: {best_domain} (score: {best_score})")
+        
+        return best_domain
+    
+    return "DOM_AGING"  # Default fallback
+
+
+def _detect_domain_fallback(title, abstract, query):
+    """Fallback domain detection if no config keywords available"""
+    text = f"{title} {abstract} {query}".lower()
+    
+    # Priority keywords (most specific)
+    priority = {
+        "rdw": "DOM_HEMATOLOGY",
+        "red cell distribution width": "DOM_HEMATOLOGY",
+        "anisocytosis": "DOM_HEMATOLOGY",
+        "testosterone": "DOM_HORMONE",
+        "estrogen": "DOM_HORMONE",
+        "shbg": "DOM_HORMONE",
+        "tsh": "DOM_THYROID",
+        "thyroid": "DOM_THYROID",
+        "homocysteine": "DOM_METHYLATION",
+        "egfr": "DOM_KIDNEY",
+        "creatinine": "DOM_KIDNEY",
+        "alt": "DOM_LIVER",
+        "ggt": "DOM_LIVER",
+        "ldl": "DOM_LIPID",
+        "cholesterol": "DOM_LIPID",
+        "crp": "DOM_INFLAMMATION",
+        "interleukin": "DOM_INFLAMMATION",
+        "glucose": "DOM_METABOLIC",
+        "insulin": "DOM_METABOLIC",
+        "hba1c": "DOM_METABOLIC",
+        "telomere": "DOM_AGING",
+        "epigenetic clock": "DOM_AGING",
+        "biological age": "DOM_AGING",
+        "vitamin d": "DOM_NUTRIENT",
+        "vitamin b12": "DOM_NUTRIENT",
+        "ferritin": "DOM_NUTRIENT",
+        "oxidative stress": "DOM_OXIDATIVE",
+        "glutathione": "DOM_OXIDATIVE",
+    }
+    
+    for kw, domain in priority.items():
+        if kw in text:
+            return domain
+    
+    return "DOM_AGING"
 
 
 # ============================================================================
-# EVIDENCE SCORING (v1.2 - Calibrated for longevity/wellness literature)
+# EVIDENCE SCORING
 # ============================================================================
 
 def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
-    """
-    Calculate evidence strength score (1-5 stars)
-    
-    v1.2 - Calibrated for longevity research:
-    - Cross-sectional/population studies score higher (common in aging research)
-    - Large cohort studies (NHANES, UK Biobank) get sample size bonus
-    - Expanded journal list for aging-specific high-impact journals
-    """
+    """Calculate evidence strength score (1-5 stars)"""
     score = 0
     
     evidence_type_lower = evidence_type.lower() if evidence_type else ""
     
-    # Evidence type scoring - longevity calibrated
     if "meta-analysis" in evidence_type_lower or "systematic review" in evidence_type_lower:
         score += 2.5
     elif "randomized" in evidence_type_lower or "rct" in evidence_type_lower:
@@ -622,20 +618,19 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
     elif "cohort" in evidence_type_lower or "case-control" in evidence_type_lower:
         score += 1.5
     elif "cross-sectional" in evidence_type_lower or "nhanes" in evidence_type_lower or "population" in evidence_type_lower:
-        score += 1.0  # Key change: cross-sectional now scores 1.0 (was 0.5)
+        score += 1.0
     elif "case series" in evidence_type_lower or "case report" in evidence_type_lower:
         score += 0.5
     else:
         score += 0.5
     
-    # Sample size scoring - calibrated for large population studies
     if sample_size:
         try:
             size_str = str(sample_size).replace(",", "").replace(" ", "")
             n = int(''.join(filter(str.isdigit, size_str.split()[0] if size_str.split() else size_str)))
             
             if n >= 10000:
-                score += 1.5  # Large population (UK Biobank, NHANES scale)
+                score += 1.5
             elif n >= 1000:
                 score += 1.0
             elif n >= 500:
@@ -647,17 +642,14 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
         except (ValueError, IndexError):
             pass
     
-    # Journal quality scoring
     journal_lower = journal.lower() if journal else ""
     if any(top in journal_lower for top in TOP_JOURNALS):
         score += 1.0
     else:
         score += 0.5
     
-    # Effect size reporting bonus
     if effect_size_reported and effect_size_reported.lower() not in ["not reported", "n/a", "none", ""]:
         score += 0.5
-        # Bonus for dose-response or quantified relationships
         if any(x in effect_size_reported.lower() for x in ["per", "dose", "quartile", "tertile", "trend"]):
             score += 0.25
     
@@ -665,7 +657,6 @@ def calculate_stars(evidence_type, sample_size, journal, effect_size_reported):
     
 
 def format_stars(num):
-    """Format star rating as emoji string."""
     return f"{num} " + "⭐️" * num
 
 
@@ -732,33 +723,26 @@ Return ONLY valid JSON, no markdown formatting."""
 # ============================================================================
 
 def get_next_evidence_id():
-    """Generate unique evidence ID"""
     now = datetime.now()
     return f"LONG_{now.strftime('%m%d%H%M%S')}{stats['added_to_airtable']:03d}"
 
 
 def add_to_airtable(article, extracted, stars, domain):
-    """Upload study to Airtable Clinical_Evidence table with auto-linking
-    
-    v1.2: Now auto-links to Health_Conditions and Symptom_Clusters based on domain
-    """
+    """Upload study to Airtable Clinical_Evidence table with auto-linking"""
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = get_airtable_headers()
     
-    # Map domain to exact Airtable single select option
-    mapped_domain = DOMAIN_MAP.get(domain, "DOM_AGING")
+    # v1.4: domain is already in DOM_ format
+    mapped_domain = domain
     
-    # Get condition_id from domain for linking
     condition_id = get_condition_from_domain(mapped_domain)
     
-    # Format biomarkers as comma-separated string
     biomarkers = extracted.get("biomarkers_studied", [])
     if isinstance(biomarkers, list):
         biomarkers_str = ", ".join(str(b) for b in biomarkers)
     else:
         biomarkers_str = str(biomarkers) if biomarkers else ""
     
-    # Build record with exact field names from Clinical_Evidence table
     record = {
         "fields": {
             "evidence_id": get_next_evidence_id(),
@@ -766,7 +750,7 @@ def add_to_airtable(article, extracted, stars, domain):
             "authors_year": f"{article.get('year', '2024')}-01-01",
             "journal": str(article.get("journal", ""))[:200],
             "toxin_domain": mapped_domain,
-            "condition_id": condition_id or "",  # NEW: Store condition_id
+            "condition_id": condition_id or "",
             "evidence_type": sanitize_evidence_type(extracted.get("evidence_type", "")),
             "sample_size": str(extracted.get("sample_size", ""))[:50],
             "markers_covered": biomarkers_str[:1000],
@@ -779,18 +763,14 @@ def add_to_airtable(article, extracted, stars, domain):
         }
     }
     
-    # =========================================================================
-    # AUTO-LINKING (v1.2)
-    # =========================================================================
+    # Auto-linking
     try:
-        # 1. Link to Health_Conditions
         if condition_id:
             health_condition_rec_id = find_health_condition_link(condition_id)
             if health_condition_rec_id:
                 record["fields"]["health_condition_link"] = [health_condition_rec_id]
                 print(f"   🔗 Linked to Health_Conditions: {condition_id}")
         
-        # 2. Link to Symptom_Clusters
         if condition_id:
             symptom_cluster_rec_ids = find_symptom_cluster_links(condition_id)
             if symptom_cluster_rec_ids:
@@ -800,7 +780,6 @@ def add_to_airtable(article, extracted, stars, domain):
     except Exception as e:
         print(f"   ⚠️ Linking error (continuing anyway): {e}")
     
-    # Remove empty string values to avoid Airtable errors
     record["fields"] = {k: v for k, v in record["fields"].items() if v and (not isinstance(v, str) or v.strip())}
     
     try:
@@ -833,9 +812,6 @@ def load_config():
                 "keywords": [
                     "longevity biomarkers blood",
                     "biological age blood markers",
-                    "healthspan inflammation CRP",
-                    "aging metabolism glucose insulin",
-                    "cardiovascular biomarkers mortality"
                 ],
                 "date_after": "2024-06-01",
                 "max_results": 25
@@ -849,12 +825,12 @@ def load_config():
 def main():
     """Main execution flow"""
     print("=" * 60)
-    print("🧬 LONGEVITY EVIDENCE SCOUT v1.3 (Priority Domain Detection)")
+    print("🧬 LONGEVITY EVIDENCE SCOUT v1.4")
+    print("   Title Weighting + Negative Keyword Exclusions")
     print("=" * 60)
     print(f"⏰ Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
     
-    # Validate environment
     if not ANTHROPIC_KEY:
         print("❌ ANTHROPIC_KEY not set!")
         sys.exit(1)
@@ -866,7 +842,6 @@ def main():
     print(f"📋 Table: {AIRTABLE_TABLE_NAME}")
     print()
     
-    # Load config
     config = load_config()
     keywords = config.get("search", {}).get("keywords", [])
     date_after = config.get("search", {}).get("date_after", "2024-06-01")
@@ -878,18 +853,17 @@ def main():
     print(f"⭐ Min score threshold: {min_score}")
     print()
     
-    # =========================================================================
-    # PRE-LOAD CACHES FOR AUTO-LINKING (v1.2)
-    # =========================================================================
+    # Pre-load domain keywords
+    load_domain_keywords(config)
+    
+    # Pre-load caches for auto-linking
     print("📥 Loading related tables for auto-linking...")
     load_health_conditions()
     load_symptom_clusters()
     print()
     
-    # Load existing titles for dedup
     existing_titles = get_existing_titles()
     
-    # Process each keyword group
     for i, keyword in enumerate(keywords, 1):
         print(f"\n{'='*60}")
         print(f"🔎 [{i}/{len(keywords)}] Searching: {keyword[:50]}...")
@@ -899,31 +873,31 @@ def main():
         print(f"   Found {len(pmids)} articles")
         
         for pmid in pmids:
-            # Rate limiting for PubMed
             time.sleep(0.4)
             
-            # Fetch abstract
             article = fetch_pubmed_abstract(pmid)
             if not article or not article.get("abstract"):
                 continue
             
-            # Check for duplicates
             title_lower = article["title"].lower().strip()
             if title_lower in existing_titles:
                 print(f"   ⏭️ Duplicate: {article['title'][:50]}...")
                 stats["duplicates_skipped"] += 1
                 continue
             
-            # Detect domain
-            domain = detect_domain(keyword, article["abstract"])
+            # v1.4: Use new domain detection with title weighting
+            domain = detect_domain(
+                article["title"], 
+                article["abstract"], 
+                keyword,
+                config
+            )
             
-            # Extract with Claude
             print(f"   🤖 Analyzing: {article['title'][:50]}...")
             extracted = ask_claude(article, domain)
             if not extracted:
                 continue
             
-            # Score evidence
             stars = calculate_stars(
                 extracted.get("evidence_type", ""),
                 extracted.get("sample_size", ""),
@@ -931,17 +905,14 @@ def main():
                 extracted.get("effect_size", "")
             )
             
-            # Check threshold
             if stars < min_score:
                 print(f"   ⏭️ Below threshold ({format_stars(stars)})")
                 stats["below_threshold"] += 1
                 continue
             
-            # Add to Airtable (now with auto-linking)
             if add_to_airtable(article, extracted, stars, domain):
                 existing_titles.add(title_lower)
     
-    # Print summary
     print("\n" + "=" * 60)
     print("📊 SUMMARY")
     print("=" * 60)
