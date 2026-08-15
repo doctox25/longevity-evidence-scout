@@ -757,8 +757,8 @@ def format_stars(num):
 # LLM EXTRACTION (xAI Grok)
 # ============================================================================
 
-XAI_BASE_URL = os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1")
-XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.6")
+XAI_BASE_URL = os.environ.get("XAI_BASE_URL") or "https://api.x.ai/v1"
+XAI_MODEL = os.environ.get("XAI_MODEL") or "grok-4.6"
 
 
 def ask_llm(article, domain):
