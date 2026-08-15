@@ -40,7 +40,6 @@ import yaml
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from anthropic import Anthropic
 
 # ============================================================================
 # DOMAIN → CONDITION MAPPING (for auto-linking)
@@ -66,7 +65,7 @@ DOMAIN_TO_CONDITION = {
 # CONFIGURATION
 # ============================================================================
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
+XAI_API_KEY = os.environ.get("XAI_API_KEY")
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_CLINICAL_BASE_ID", "app42HAczcSBeZOxD")
@@ -755,12 +754,15 @@ def format_stars(num):
 
 
 # ============================================================================
-# CLAUDE AI EXTRACTION
+# LLM EXTRACTION (xAI Grok)
 # ============================================================================
 
-def ask_claude(article, domain):
-    """Use Claude to extract structured metadata from abstract"""
-    client = Anthropic(api_key=ANTHROPIC_KEY)
+XAI_BASE_URL = os.environ.get("XAI_BASE_URL") or "https://api.x.ai/v1"
+XAI_MODEL = os.environ.get("XAI_MODEL") or "grok-4.6"
+
+
+def ask_llm(article, domain):
+    """Use Grok to extract structured metadata from abstract"""
 
     prompt = f"""Analyze this longevity/healthspan research article and extract structured information.
 
@@ -787,13 +789,18 @@ Extract the following in JSON format:
 Return ONLY valid JSON, no markdown formatting."""
 
     try:
-        response = client.messages.create(
-            model=os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}]
+        resp = requests.post(
+            f"{XAI_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": XAI_MODEL,
+                "max_tokens": 1500,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=120,
         )
-        
-        text = response.content[0].text.strip()
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"].strip()
         
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
@@ -808,7 +815,7 @@ Return ONLY valid JSON, no markdown formatting."""
         stats["errors"] += 1
         return None
     except Exception as e:
-        print(f"⚠️ Claude API error: {e}")
+        print(f"⚠️ LLM API error: {e}")
         stats["errors"] += 1
         return None
 
@@ -926,8 +933,8 @@ def main():
     print(f"⏰ Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
     
-    if not ANTHROPIC_KEY:
-        print("❌ ANTHROPIC_KEY not set!")
+    if not XAI_API_KEY:
+        print("❌ XAI_API_KEY not set!")
         sys.exit(1)
     if not AIRTABLE_API_KEY:
         print("❌ AIRTABLE_API_KEY not set!")
@@ -998,7 +1005,7 @@ def main():
             )
 
             print(f"   🤖 Analyzing: {article['title'][:50]}...")
-            extracted = ask_claude(article, domain)
+            extracted = ask_llm(article, domain)
             if not extracted:
                 continue
 
