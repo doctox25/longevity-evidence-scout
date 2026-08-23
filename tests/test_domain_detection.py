@@ -89,30 +89,39 @@ class TestDetectDomain(unittest.TestCase):
             "No matching domain keywords must fall back to DOM_AGING")
 
     def test_title_weighting_3x(self):
-        """Title keywords count 3x (title_weight=3) vs abstract (1x)."""
-        # Title has one keyword (score 3), abstract has two from a different domain (score 2).
-        # Title domain should win because 3 > 2.
-        title = "Testosterone supplementation study"  # DOM_HORMONE: testosterone → 3 pts
-        abstract = "We measured glucose insulin HbA1c in participants."  # DOM_METABOLIC: 3 keywords → 3 pts
+        """Title keyword at title_weight=3 must beat 2 abstract keywords.
+
+        max() on a score tie returns the first domain in config order, so
+        the title domain must come AFTER the abstract domain. Otherwise a
+        title_weight=2 regression still passes via tie → first-key.
+        """
+        self.assertEqual(CONFIG["domain_keywords"]["DOM_LIPID"]["title_weight"], 3)
+        # Title: 1 lipid keyword × 3 = 3. Abstract: 2 thyroid keywords × 1 = 2.
+        # If title_weight regressed to 2: lipid=2, thyroid=2 → DOM_THYROID wins
+        # because it is declared before DOM_LIPID.
+        title = "ApoB supplementation study"
+        abstract = "We measured TSH and thyroxine in participants."
         domain = main.detect_domain(title, abstract, "", CONFIG)
-        # Both score 3, but the order of iteration matters. Let's use a clearer example:
-        # Title with 1 thyroid keyword (3 pts) vs abstract with 2 metabolic keywords (2 pts)
-        title = "TSH reference ranges"  # DOM_THYROID: TSH in title → 3 pts
-        abstract = "We measured glucose and insulin in participants."  # DOM_METABOLIC: 2 keywords → 2 pts
-        domain = main.detect_domain(title, abstract, "", CONFIG)
-        self.assertEqual(domain, "DOM_THYROID",
-            "Title keyword (3pts) must outweigh 2 abstract keywords (2pts)")
+        self.assertEqual(domain, "DOM_LIPID",
+            "Title keyword (3pts) must outweigh 2 earlier-domain abstract keywords (2pts)")
 
     def test_negative_keyword_excludes_domain(self):
-        """If a negative keyword for DOM_HORMONE appears, DOM_HORMONE is skipped."""
-        # A study that mentions both testosterone AND thyroid should NOT
-        # classify as DOM_HORMONE (negative keyword 'thyroid' excludes it).
-        # It will instead fall through to DOM_THYROID (positive match).
-        title = "Testosterone and thyroid interaction in aging men"
-        abstract = "We measured testosterone, TSH, and free T4 levels."
+        """Hormone negative 'thyroid' must skip DOM_HORMONE even when a
+        hormone primary would otherwise win on title weight.
+
+        Fixture uses cortisol (hormone primary, not a thyroid negative) plus
+        thyroid (hormone negative + thyroid primary). Testosterone cannot be
+        used: it is also a thyroid negative, so both domains get skipped and
+        assertNotEqual(DOM_HORMONE) passes whether hormone negatives work.
+        """
+        # Keep the fixture to two tokens. "circadian rhythm" is a
+        # DOM_LIFESTYLE primary (title_weight 2) and would win over thyroid=1.
+        title = "Cortisol"
+        abstract = "thyroid"
         domain = main.detect_domain(title, abstract, "", CONFIG)
-        self.assertNotEqual(domain, "DOM_HORMONE",
-            "DOM_HORMONE must be excluded when thyroid negative keyword matches")
+        self.assertEqual(domain, "DOM_THYROID",
+            "DOM_HORMONE must be skipped when a hormone negative matches; "
+            "DOM_THYROID is the remaining positive match")
 
 
 class TestDetectDomainFallback(unittest.TestCase):
